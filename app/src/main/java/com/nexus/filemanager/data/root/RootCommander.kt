@@ -1,6 +1,7 @@
 package com.nexus.filemanager.data.root
 
 import android.util.Log
+import com.nexus.filemanager.data.fs.shellQuote
 import com.nexus.filemanager.data.model.RootInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,15 +39,15 @@ object RootCommander {
     @Volatile
     private var detectedSuPath: String? = null
 
-    private fun startSuProcess(): Process {
+    private fun startSuProcess(vararg args: String): Process {
         detectedSuPath?.let { path ->
             try {
-                return ProcessBuilder(path).start()
+                return ProcessBuilder(path, *args).start()
             } catch (_: Exception) {}
         }
         for (candidate in listOf("su") + SU_PATHS) {
             try {
-                val p = ProcessBuilder(candidate).start()
+                val p = ProcessBuilder(candidate, *args).start()
                 detectedSuPath = candidate
                 return p
             } catch (_: Exception) {}
@@ -93,74 +94,66 @@ object RootCommander {
         )
     }
 
-    suspend fun execute(command: String, timeoutSeconds: Long = 15): CommandResult = withContext(Dispatchers.IO) {
-        val stdout = mutableListOf<String>()
-        val stderr = mutableListOf<String>()
+    suspend fun execute(command: String, timeoutSeconds: Long = 15): CommandResult =
+        withContext(Dispatchers.IO) { executeBlocking(command, timeoutSeconds) }
+
+    fun executeBlocking(command: String, timeoutSeconds: Long = 15): CommandResult {
+        val stdout = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val stderr = java.util.Collections.synchronizedList(mutableListOf<String>())
         var process: Process? = null
 
         try {
             process = startSuProcess()
             val os = DataOutputStream(process.outputStream)
-            val isReader = BufferedReader(InputStreamReader(process.inputStream))
-            val esReader = BufferedReader(InputStreamReader(process.errorStream))
-
             os.writeBytes("$command\n")
             os.writeBytes("exit\n")
             os.flush()
 
-            val stdoutThread = Thread {
-                try {
-                    var line: String?
-                    while (isReader.readLine().also { line = it } != null) {
-                        stdout.add(line!!)
-                    }
-                } catch (_: Exception) {}
-            }
-
-            val stderrThread = Thread {
-                try {
-                    var line: String?
-                    while (esReader.readLine().also { line = it } != null) {
-                        stderr.add(line!!)
-                    }
-                } catch (_: Exception) {}
-            }
-
+            val stdoutThread = Thread { drainLines(process.inputStream, stdout) }
+            val stderrThread = Thread { drainLines(process.errorStream, stderr) }
             stdoutThread.start()
             stderrThread.start()
 
-            val finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-            if (!finished) {
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                 process.destroyForcibly()
-                return@withContext CommandResult(-1, stdout, listOf("Command timed out"))
+                return CommandResult(-1, stdout.toList(), listOf("Command timed out"))
             }
-
             stdoutThread.join(1000)
             stderrThread.join(1000)
-
-            CommandResult(process.exitValue(), stdout, stderr)
+            return CommandResult(process.exitValue(), stdout.toList(), stderr.toList())
         } catch (e: Exception) {
             Log.e(TAG, "Error executing root command: $command", e)
-            CommandResult(-1, emptyList(), listOf(e.message ?: "Execution error"))
+            return CommandResult(-1, emptyList(), listOf(e.message ?: "Execution error"))
         } finally {
             process?.destroy()
         }
     }
 
+    /** Runs [command] as root and hands out its raw stdin/stdout, for binary transfers. */
+    // `su -c`, not the command on stdin: the shell may read ahead into data meant for the command.
+    fun openProcess(command: String): Process = startSuProcess("-c", command)
+
+    private fun drainLines(stream: java.io.InputStream, into: MutableList<String>) {
+        try {
+            BufferedReader(InputStreamReader(stream)).forEachLine { into.add(it) }
+        } catch (_: Exception) {}
+    }
+
     suspend fun remountPartition(partition: String = "/", readWrite: Boolean = true): Boolean = withContext(Dispatchers.IO) {
         val mode = if (readWrite) "rw" else "ro"
-        val cmd = "mount -o remount,$mode $partition || mount -o remount,$mode /system || su -c 'toybox mount -o remount,$mode /'"
+        val cmd = "mount -o remount,$mode ${shellQuote(partition)} || mount -o remount,$mode /system"
         val result = execute(cmd)
         result.isSuccess
     }
 
     suspend fun changePermissions(path: String, octal: String): Boolean = withContext(Dispatchers.IO) {
-        val result = execute("chmod $octal \"$path\"")
+        if (!octal.matches(Regex("[0-7]{3,4}"))) return@withContext false
+        val result = execute("chmod $octal ${shellQuote(path)}")
         result.isSuccess
     }
 
     suspend fun changeOwner(path: String, owner: String, group: String): Boolean = withContext(Dispatchers.IO) {
-        val result = execute("chown $owner:$group \"$path\"")
+        val result = execute("chown ${shellQuote("$owner:$group")} ${shellQuote(path)}")
         result.isSuccess
     }
 }

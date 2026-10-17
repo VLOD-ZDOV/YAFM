@@ -176,7 +176,7 @@ fun FileListItem(
                                 onDetails()
                             }
                         )
-                        if (item.storageType == StorageType.ROOT || item.storageType == StorageType.LOCAL || item.storageType == StorageType.SFTP) {
+                        if (item.storageType != StorageType.SMB) {
                             DropdownMenuItem(
                                 text = { Text("Права (chmod)") },
                                 onClick = {

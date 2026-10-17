@@ -59,6 +59,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,7 +74,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexus.filemanager.data.model.ServerConfig
-import com.nexus.filemanager.data.model.StorageType
 import com.nexus.filemanager.ui.components.ServerDialog
 import com.nexus.filemanager.ui.components.StorageGaugeCard
 import com.nexus.filemanager.ui.theme.ApkColor
@@ -108,6 +110,8 @@ fun HomeScreen(
     val servers by viewModel.serverRepo.servers.collectAsState()
 
     var showAddServerDialog by remember { mutableStateOf(false) }
+    var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
+    var deletingServer by remember { mutableStateOf<ServerConfig?>(null) }
 
     val categories = remember {
         val root = Environment.getExternalStorageDirectory().absolutePath
@@ -121,12 +125,37 @@ fun HomeScreen(
         )
     }
 
-    if (showAddServerDialog) {
+    if (showAddServerDialog || editingServer != null) {
+        val close = {
+            showAddServerDialog = false
+            editingServer = null
+        }
         ServerDialog(
-            onDismiss = { showAddServerDialog = false },
+            initialConfig = editingServer,
+            qshAvailable = viewModel.repository.qsh.isAvailable,
+            onTest = viewModel::testConnection,
+            onPair = viewModel::pairQsh,
+            onDismiss = close,
             onSave = { config ->
                 viewModel.serverRepo.saveServer(config)
-                showAddServerDialog = false
+                close()
+            }
+        )
+    }
+
+    deletingServer?.let { server ->
+        AlertDialog(
+            onDismissRequest = { deletingServer = null },
+            title = { Text("Удалить подключение?") },
+            text = { Text("«${server.name}» исчезнет из списка. Файлы на сервере не затрагиваются.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.serverRepo.deleteServer(server.id)
+                    deletingServer = null
+                }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingServer = null }) { Text("Отмена") }
             }
         )
     }
@@ -237,7 +266,7 @@ fun HomeScreen(
                         CategoryCard(
                             category = cat,
                             onClick = {
-                                viewModel.navigateTo(cat.path, StorageType.LOCAL, null)
+                                viewModel.navigateToLocal(cat.path)
                                 onNavigateToExplorer()
                             },
                             modifier = Modifier.weight(1f)
@@ -253,7 +282,7 @@ fun HomeScreen(
                         CategoryCard(
                             category = cat,
                             onClick = {
-                                viewModel.navigateTo(cat.path, StorageType.LOCAL, null)
+                                viewModel.navigateToLocal(cat.path)
                                 onNavigateToExplorer()
                             },
                             modifier = Modifier.weight(1f)
@@ -288,7 +317,7 @@ fun HomeScreen(
 
                     FilledTonalButton(
                         onClick = {
-                            viewModel.navigateTo("/system", StorageType.ROOT, null)
+                            viewModel.navigateToRoot("/system")
                             onNavigateToExplorer()
                         },
                         modifier = Modifier.weight(1f)
@@ -300,7 +329,7 @@ fun HomeScreen(
 
                     FilledTonalButton(
                         onClick = {
-                            viewModel.navigateTo("/data", StorageType.ROOT, null)
+                            viewModel.navigateToRoot("/data")
                             onNavigateToExplorer()
                         },
                         modifier = Modifier.weight(1f)
@@ -418,7 +447,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Сетевые хранилища (SMB / SFTP / FTP)",
+                        text = "Сетевые хранилища",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -462,7 +491,7 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Подключение к Windows Samba, Linux SFTP/SSHFS, NAS или FTP",
+                                    text = "SFTP, qsh, Samba (Windows, NAS) или FTP",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -478,9 +507,8 @@ fun HomeScreen(
                             viewModel.navigateToServer(server)
                             onNavigateToExplorer()
                         },
-                        onDelete = {
-                            viewModel.serverRepo.deleteServer(server.id)
-                        }
+                        onEdit = { editingServer = server },
+                        onDelete = { deletingServer = server }
                     )
                 }
             }
@@ -611,6 +639,7 @@ fun CategoryCard(
 fun ServerCard(
     server: ServerConfig,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -656,6 +685,13 @@ fun ServerCard(
                 )
             }
 
+            IconButton(onClick = onEdit) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Изменить",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,

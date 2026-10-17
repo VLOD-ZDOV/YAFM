@@ -45,12 +45,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun FileDetailsDialog(
     item: FileItem,
+    repository: FileRepository,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val repo = remember { FileRepository() }
 
     var md5Hash by remember { mutableStateOf<String?>(null) }
     var isCalculatingHash by remember { mutableStateOf(false) }
@@ -105,7 +105,8 @@ fun FileDetailsDialog(
                                     onClick = {
                                         isCalculatingHash = true
                                         scope.launch {
-                                            md5Hash = repo.calculateChecksum(item, "MD5")
+                                            md5Hash = runCatching { repository.checksum(item, "MD5") }
+                                                .getOrElse { "Ошибка: ${it.message}" }
                                             isCalculatingHash = false
                                         }
                                     },

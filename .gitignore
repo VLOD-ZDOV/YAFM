@@ -9,3 +9,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# qsh client binary, fetched by scripts/fetch-qsh.sh
+/app/src/main/jniLibs/
+# Local notes and plans
+/docs/

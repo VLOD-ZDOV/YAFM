@@ -4,21 +4,30 @@ import android.app.Application
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.filemanager.YafmApp
 import com.nexus.filemanager.data.archive.ArchiveManager
+import com.nexus.filemanager.data.fs.joinPath
 import com.nexus.filemanager.data.model.FileItem
+import com.nexus.filemanager.data.model.Location
 import com.nexus.filemanager.data.model.RootInfo
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageStats
 import com.nexus.filemanager.data.model.StorageType
-import com.nexus.filemanager.data.repository.FileRepository
-import com.nexus.filemanager.data.repository.ServerRepository
 import com.nexus.filemanager.data.root.RootCommander
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.Stack
 
 enum class SortMode {
     NAME_ASC,
@@ -42,21 +51,22 @@ data class PathSegment(
 
 class FileExplorerViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val fileRepo = FileRepository()
-    val serverRepo = ServerRepository(application)
+    val repository = (application as YafmApp).repository
+    val serverRepo = repository.servers
 
-    // Current State
-    private val _currentPath = MutableStateFlow(Environment.getExternalStorageDirectory().absolutePath)
-    val currentPath: StateFlow<String> = _currentPath.asStateFlow()
+    private val internalRoot = Environment.getExternalStorageDirectory().absolutePath
 
-    private val _currentStorageType = MutableStateFlow(StorageType.LOCAL)
-    val currentStorageType: StateFlow<StorageType> = _currentStorageType.asStateFlow()
+    private val _location = MutableStateFlow(Location(StorageType.LOCAL, internalRoot))
+    val location: StateFlow<Location> = _location.asStateFlow()
 
-    private val _currentServer = MutableStateFlow<ServerConfig?>(null)
-    val currentServer: StateFlow<ServerConfig?> = _currentServer.asStateFlow()
+    val currentPath: StateFlow<String> = _location.map { it.path }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, internalRoot)
+    val currentStorageType: StateFlow<StorageType> = _location.map { it.type }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, StorageType.LOCAL)
+    val currentServer: StateFlow<ServerConfig?> = _location.map { it.server }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val _fileList = MutableStateFlow<List<FileItem>>(emptyList())
-    val fileList: StateFlow<List<FileItem>> = _fileList.asStateFlow()
+    private val rawFiles = MutableStateFlow<List<FileItem>>(emptyList())
 
     private val _storageStats = MutableStateFlow<List<StorageStats>>(emptyList())
     val storageStats: StateFlow<List<StorageStats>> = _storageStats.asStateFlow()
@@ -67,10 +77,18 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    /** Why the current directory could not be listed (shown instead of the list). */
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // Preferences & View Modes
+    /** One-off messages about operations (shown as toasts). */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    /** What a long operation (paste, delete...) is doing right now. */
+    private val _progress = MutableStateFlow<String?>(null)
+    val progress: StateFlow<String?> = _progress.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -83,7 +101,11 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
-    // Selection & Clipboard
+    val fileList: StateFlow<List<FileItem>> =
+        combine(rawFiles, _searchQuery, _showHiddenFiles, _sortMode) { files, query, hidden, sort ->
+            filterAndSort(files, query.trim().lowercase(), hidden, sort)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private val _selectedItems = MutableStateFlow<Set<FileItem>>(emptySet())
     val selectedItems: StateFlow<Set<FileItem>> = _selectedItems.asStateFlow()
 
@@ -93,8 +115,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _clipboardOp = MutableStateFlow(ClipboardOp.NONE)
     val clipboardOp: StateFlow<ClipboardOp> = _clipboardOp.asStateFlow()
 
-    // Navigation Stack
-    private val navigationStack = Stack<Pair<String, StorageType>>()
+    private val history = ArrayDeque<Location>()
+    private var loadJob: Job? = null
 
     init {
         refreshDashboard()
@@ -103,115 +125,97 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun refreshDashboard() {
         viewModelScope.launch {
-            _rootInfo.value = RootCommander.checkRoot()
-            _storageStats.value = fileRepo.getStorageStats()
+            val info = RootCommander.checkRoot()
+            repository.rootGranted = info.isRootGranted
+            _rootInfo.value = info
+            _storageStats.value = repository.getStorageStats()
         }
     }
 
     fun loadCurrentDirectory() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             _selectedItems.value = emptySet()
             try {
-                val files = fileRepo.listFiles(
-                    path = _currentPath.value,
-                    storageType = _currentStorageType.value,
-                    serverConfig = _currentServer.value
-                )
-                _fileList.value = applyFiltersAndSort(files)
+                rawFiles.value = repository.list(_location.value)
             } catch (e: Exception) {
-                _errorMessage.value = e.message ?: "Не удалось загрузить файлы"
-                _fileList.value = emptyList()
+                _errorMessage.value = describe(e)
+                rawFiles.value = emptyList()
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
-    fun navigateTo(path: String, storageType: StorageType = _currentStorageType.value, server: ServerConfig? = _currentServer.value) {
-        navigationStack.push(Pair(_currentPath.value, _currentStorageType.value))
-        _currentPath.value = path
-        _currentStorageType.value = storageType
-        _currentServer.value = server
+    // Navigation
+
+    private fun go(target: Location) {
+        if (target == _location.value) return loadCurrentDirectory()
+        history.addLast(_location.value)
+        _location.value = target
+        _searchQuery.value = ""
         loadCurrentDirectory()
     }
 
-    fun navigateToRoot() {
-        navigateTo("/", StorageType.ROOT, null)
-    }
+    /** Another directory in the current storage. */
+    fun navigateTo(path: String) = go(_location.value.copy(path = path))
 
-    fun navigateToInternalStorage() {
-        navigateTo(Environment.getExternalStorageDirectory().absolutePath, StorageType.LOCAL, null)
-    }
+    fun navigateToRoot(path: String = "/") = go(Location(StorageType.ROOT, path))
+
+    fun navigateToInternalStorage() = go(Location(StorageType.LOCAL, internalRoot))
+
+    fun navigateToLocal(path: String) = go(Location(StorageType.LOCAL, path))
 
     fun navigateToServer(server: ServerConfig) {
-        val initialPath = when (server.type) {
-            StorageType.SMB -> "/"
-            StorageType.SFTP -> server.remotePath.ifEmpty { "/" }
-            StorageType.FTP -> server.remotePath.ifEmpty { "/" }
-            else -> "/"
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                go(Location(server.type, repository.startPath(server), server))
+            } catch (e: Exception) {
+                _isLoading.value = false
+                _messages.tryEmit("${server.name}: ${describe(e)}")
+            }
         }
-        navigateTo(initialPath, server.type, server)
     }
 
     fun navigateBack(): Boolean {
-        if (!navigationStack.isEmpty()) {
-            val (prevPath, prevType) = navigationStack.pop()
-            _currentPath.value = prevPath
-            _currentStorageType.value = prevType
-            loadCurrentDirectory()
-            return true
-        }
-        return false
+        val previous = history.removeLastOrNull() ?: return false
+        _location.value = previous
+        _searchQuery.value = ""
+        loadCurrentDirectory()
+        return true
     }
 
     fun getBreadcrumbs(): List<PathSegment> {
-        val path = _currentPath.value
-        val segments = mutableListOf<PathSegment>()
-
-        val prefix = when (_currentStorageType.value) {
+        val loc = _location.value
+        val base = when (loc.type) {
+            StorageType.LOCAL -> if (loc.path.startsWith(internalRoot)) internalRoot else "/"
+            else -> "/"
+        }
+        val title = when (loc.type) {
             StorageType.ROOT -> "Root (/)"
-            StorageType.LOCAL -> "Память"
-            StorageType.SMB -> _currentServer.value?.name ?: "SMB"
-            StorageType.SFTP -> _currentServer.value?.name ?: "SFTP"
-            StorageType.FTP -> _currentServer.value?.name ?: "FTP"
+            StorageType.LOCAL -> if (base == internalRoot) "Память" else "/"
+            else -> loc.server?.name ?: loc.type.name
         }
-
-        segments.add(PathSegment(prefix, if (_currentStorageType.value == StorageType.ROOT) "/" else Environment.getExternalStorageDirectory().absolutePath))
-
-        if (path == "/" || path == Environment.getExternalStorageDirectory().absolutePath) {
-            return segments
+        val segments = mutableListOf(PathSegment(title, base))
+        var cumulative = base
+        loc.path.removePrefix(base).split('/').filter { it.isNotEmpty() }.forEach { part ->
+            cumulative = joinPath(cumulative, part)
+            segments += PathSegment(part, cumulative)
         }
-
-        val relative = if (_currentStorageType.value == StorageType.LOCAL) {
-            val root = Environment.getExternalStorageDirectory().absolutePath
-            if (path.startsWith(root)) path.removePrefix(root).trim('/') else path.trim('/')
-        } else {
-            path.trim('/')
-        }
-
-        if (relative.isNotEmpty()) {
-            val parts = relative.split('/')
-            var cumulative = if (_currentStorageType.value == StorageType.LOCAL) Environment.getExternalStorageDirectory().absolutePath else ""
-            for (p in parts) {
-                cumulative = if (cumulative.endsWith("/")) "$cumulative$p" else "$cumulative/$p"
-                segments.add(PathSegment(p, cumulative))
-            }
-        }
-
         return segments
     }
 
-    // Search and Sort
+    // Search and sort
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        loadCurrentDirectory()
     }
 
     fun toggleHiddenFiles() {
         _showHiddenFiles.value = !_showHiddenFiles.value
-        loadCurrentDirectory()
     }
 
     fun toggleGridView() {
@@ -220,58 +224,47 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun setSortMode(mode: SortMode) {
         _sortMode.value = mode
-        loadCurrentDirectory()
     }
 
-    private fun applyFiltersAndSort(items: List<FileItem>): List<FileItem> {
-        val query = _searchQuery.value.trim().lowercase()
-        val showHidden = _showHiddenFiles.value
-
-        var filtered = items.filter { item ->
-            (showHidden || !item.isHidden) && (query.isEmpty() || item.name.lowercase().contains(query))
-        }
-
-        filtered = when (_sortMode.value) {
-            SortMode.NAME_ASC -> filtered.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            SortMode.NAME_DESC -> filtered.sortedWith(compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() })
-            SortMode.DATE_DESC -> filtered.sortedWith(compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified })
-            SortMode.DATE_ASC -> filtered.sortedWith(compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified })
-            SortMode.SIZE_DESC -> filtered.sortedWith(compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size })
-            SortMode.SIZE_ASC -> filtered.sortedWith(compareBy<FileItem> { !it.isDirectory }.thenBy { it.size })
-        }
-
-        return filtered
+    private fun filterAndSort(items: List<FileItem>, query: String, showHidden: Boolean, sort: SortMode): List<FileItem> {
+        val filtered = items.filter { (showHidden || !it.isHidden) && (query.isEmpty() || it.name.lowercase().contains(query)) }
+        val dirsFirst = compareBy<FileItem> { !it.isDirectory }
+        return filtered.sortedWith(
+            when (sort) {
+                SortMode.NAME_ASC -> dirsFirst.thenBy { it.name.lowercase() }
+                SortMode.NAME_DESC -> dirsFirst.thenByDescending { it.name.lowercase() }
+                SortMode.DATE_DESC -> dirsFirst.thenByDescending { it.lastModified }
+                SortMode.DATE_ASC -> dirsFirst.thenBy { it.lastModified }
+                SortMode.SIZE_DESC -> dirsFirst.thenByDescending { it.size }
+                SortMode.SIZE_ASC -> dirsFirst.thenBy { it.size }
+            }
+        )
     }
 
     // Selection
+
     fun toggleSelection(item: FileItem) {
-        val current = _selectedItems.value.toMutableSet()
-        if (current.contains(item)) {
-            current.remove(item)
-        } else {
-            current.add(item)
-        }
-        _selectedItems.value = current
+        val current = _selectedItems.value
+        _selectedItems.value = if (item in current) current - item else current + item
     }
 
     fun selectAll() {
-        _selectedItems.value = _fileList.value.toSet()
+        _selectedItems.value = fileList.value.toSet()
     }
 
     fun clearSelection() {
         _selectedItems.value = emptySet()
     }
 
-    // Clipboard
-    fun copySelected() {
-        _clipboardItems.value = _selectedItems.value.toList()
-        _clipboardOp.value = ClipboardOp.COPY
-        clearSelection()
-    }
+    // Clipboard: works across storages (phone <-> server, server <-> server).
 
-    fun cutSelected() {
+    fun copySelected() = toClipboard(ClipboardOp.COPY)
+
+    fun cutSelected() = toClipboard(ClipboardOp.CUT)
+
+    private fun toClipboard(op: ClipboardOp) {
         _clipboardItems.value = _selectedItems.value.toList()
-        _clipboardOp.value = ClipboardOp.CUT
+        _clipboardOp.value = op
         clearSelection()
     }
 
@@ -281,149 +274,180 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun pasteClipboard() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            val targetDir = _currentPath.value
-            val op = _clipboardOp.value
-            val items = _clipboardItems.value
-
-            for (item in items) {
-                if (op == ClipboardOp.COPY) {
-                    fileRepo.copy(item, targetDir, _currentServer.value)
-                } else if (op == ClipboardOp.CUT) {
-                    fileRepo.move(item, targetDir, _currentServer.value)
-                }
-            }
-
+        val items = _clipboardItems.value
+        val move = _clipboardOp.value == ClipboardOp.CUT
+        operation {
+            val skipped = repository.transfer(items, _location.value, move) { _progress.value = it }
             clearClipboard()
-            loadCurrentDirectory()
+            _messages.tryEmit(
+                (if (move) "Перемещено: ${items.size}" else "Скопировано: ${items.size}") +
+                    if (skipped > 0) ". Ссылки на папки не копируются, пропущено: $skipped" else ""
+            )
         }
     }
 
-    // File Operations
-    fun deleteSelected(onDone: () -> Unit) {
+    // File operations
+
+    /**
+     * Runs a change in the current directory: shows progress, reports the result or the error,
+     * and reloads the listing either way (a partial failure still changed something).
+     */
+    private fun operation(success: String? = null, block: suspend () -> Unit) {
         viewModelScope.launch {
-            _isLoading.value = true
-            for (item in _selectedItems.value) {
-                fileRepo.delete(item, _currentServer.value)
+            _progress.value = "…"
+            try {
+                block()
+                success?.let { _messages.tryEmit(it) }
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            } finally {
+                _progress.value = null
+                loadCurrentDirectory()
             }
-            clearSelection()
-            loadCurrentDirectory()
+        }
+    }
+
+    fun deleteSelected(onDone: () -> Unit = {}) {
+        val items = _selectedItems.value.toList()
+        clearSelection()
+        deleteItems(items, onDone)
+    }
+
+    fun deleteItems(items: List<FileItem>, onDone: () -> Unit = {}) {
+        operation("Удалено: ${items.size}") {
+            items.forEachIndexed { i, item ->
+                _progress.value = "${i + 1}/${items.size}: ${item.name}"
+                repository.delete(item)
+            }
             onDone()
         }
     }
 
-    fun renameFile(item: FileItem, newName: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            fileRepo.rename(item, newName, _currentServer.value)
-            loadCurrentDirectory()
-        }
-    }
+    fun renameFile(item: FileItem, newName: String) = operation { repository.rename(item, newName) }
 
-    fun createFolder(name: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            fileRepo.createDirectory(_currentPath.value, name, _currentStorageType.value, _currentServer.value)
-            loadCurrentDirectory()
-        }
-    }
+    fun createFolder(name: String) = operation { repository.createDirectory(_location.value, name) }
 
-    fun createNewFile(name: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            fileRepo.createFile(_currentPath.value, name, _currentStorageType.value, _currentServer.value)
-            loadCurrentDirectory()
-        }
-    }
+    fun createNewFile(name: String) = operation { repository.createFile(_location.value, name) }
 
-    fun changePermissions(item: FileItem, octal: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            fileRepo.changePermissions(item, octal, _currentServer.value)
-            loadCurrentDirectory()
-        }
+    fun changePermissions(item: FileItem, octal: String) = operation("Права изменены") {
+        repository.changePermissions(item, octal)
     }
 
     fun remountPartition(partition: String, rw: Boolean) {
         viewModelScope.launch {
-            _isLoading.value = true
-            RootCommander.remountPartition(partition, rw)
-            _isLoading.value = false
+            val ok = RootCommander.remountPartition(partition, rw)
+            _messages.tryEmit(if (ok) "$partition перемонтирован (${if (rw) "RW" else "RO"})" else "Не удалось перемонтировать $partition")
         }
     }
 
-    // Archive Operations
+    /** Opens a file in a viewer or another app: remote files are fetched to the cache first. */
+    fun withLocalCopy(item: FileItem, onReady: (File) -> Unit) {
+        viewModelScope.launch {
+            _progress.value = "Загрузка ${item.name}…"
+            try {
+                onReady(repository.materialize(item))
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            } finally {
+                _progress.value = null
+            }
+        }
+    }
+
+    // Archives: remote archives are fetched first; the result is written locally.
+
     private val _archiveProgress = MutableStateFlow<ArchiveManager.Progress?>(null)
     val archiveProgress: StateFlow<ArchiveManager.Progress?> = _archiveProgress.asStateFlow()
 
     private val _isArchiveProcessing = MutableStateFlow(false)
     val isArchiveProcessing: StateFlow<Boolean> = _isArchiveProcessing.asStateFlow()
 
+    /** Where archive results go: the current folder if it is local, else Download. */
+    fun archiveOutputDir(): String =
+        _location.value.takeIf { it.type == StorageType.LOCAL }?.path
+            ?: Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+
     fun extractArchive(archiveItem: FileItem, targetDir: String, onDone: () -> Unit) {
         viewModelScope.launch {
             _isArchiveProcessing.value = true
-            val src = File(archiveItem.path)
-            val dest = File(targetDir)
-            ArchiveManager.extractArchive(src, dest) { prog ->
-                _archiveProgress.value = prog
+            try {
+                val src = repository.materialize(archiveItem)
+                ArchiveManager.extractArchive(src, File(targetDir)) { _archiveProgress.value = it }
+                onDone()
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            } finally {
+                _isArchiveProcessing.value = false
+                _archiveProgress.value = null
+                loadCurrentDirectory()
             }
-            _isArchiveProcessing.value = false
-            _archiveProgress.value = null
-            loadCurrentDirectory()
-            onDone()
         }
     }
 
     fun compressSelected(archiveName: String, onDone: () -> Unit) {
         viewModelScope.launch {
             _isArchiveProcessing.value = true
-            val srcFiles = _selectedItems.value.map { File(it.path) }
-            val destFile = File(_currentPath.value, archiveName)
-            ArchiveManager.createZipArchive(srcFiles, destFile) { prog ->
-                _archiveProgress.value = prog
+            try {
+                val sources = _selectedItems.value.map { repository.materialize(it) }
+                val dest = File(archiveOutputDir(), archiveName)
+                ArchiveManager.createZipArchive(sources, dest) { _archiveProgress.value = it }
+                clearSelection()
+                onDone()
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            } finally {
+                _isArchiveProcessing.value = false
+                _archiveProgress.value = null
+                loadCurrentDirectory()
             }
-            _isArchiveProcessing.value = false
-            _archiveProgress.value = null
-            clearSelection()
-            loadCurrentDirectory()
-            onDone()
         }
     }
 
-    fun batchRenameSelected(
-        prefix: String,
-        suffix: String,
-        find: String,
-        replace: String,
-        addIndex: Boolean
-    ) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            val items = _selectedItems.value.toList()
+    fun batchRenameSelected(prefix: String, suffix: String, find: String, replace: String, addIndex: Boolean) {
+        val items = _selectedItems.value.toList()
+        clearSelection()
+        operation("Переименовано: ${items.size}") {
             items.forEachIndexed { i, item ->
-                val ext = if (item.isDirectory) "" else ".${item.extension}"
-                val base = if (item.isDirectory) item.name else item.name.substringBeforeLast('.')
-                var result = base
-                if (find.isNotEmpty()) {
-                    result = result.replace(find, replace)
-                }
-                if (prefix.isNotEmpty()) {
-                    result = "$prefix$result"
-                }
-                if (suffix.isNotEmpty()) {
-                    result = "$result$suffix"
-                }
-                if (addIndex) {
-                    result = "${result}_${i + 1}"
-                }
-                val newName = "$result$ext"
-                if (newName != item.name) {
-                    fileRepo.rename(item, newName, _currentServer.value)
-                }
+                val newName = batchName(item, i, prefix, suffix, find, replace, addIndex)
+                if (newName != item.name) repository.rename(item, newName)
             }
-            clearSelection()
-            loadCurrentDirectory()
+        }
+    }
+
+    fun testConnection(config: ServerConfig, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            onResult(runCatching { repository.testConnection(config) }.exceptionOrNull()?.let { describe(it) })
+        }
+    }
+
+    fun pairQsh(config: ServerConfig, code: String, onResult: (ok: Boolean, message: String) -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.pairQsh(config, code) }
+                .onSuccess { onResult(true, it.ifBlank { "Связано" }) }
+                .onFailure { onResult(false, describe(it)) }
+        }
+    }
+
+    companion object {
+        fun batchName(item: FileItem, index: Int, prefix: String, suffix: String, find: String, replace: String, addIndex: Boolean): String {
+            val hasExt = !item.isDirectory && item.extension.isNotEmpty()
+            val base = if (hasExt) item.name.substringBeforeLast('.') else item.name
+            var result = if (find.isNotEmpty()) base.replace(find, replace) else base
+            result = "$prefix$result$suffix"
+            if (addIndex) result = "${result}_${index + 1}"
+            return if (hasExt) "$result.${item.name.substringAfterLast('.')}" else result
+        }
+
+        fun describe(e: Throwable): String {
+            val name = e.javaClass.simpleName
+            return when {
+                name == "JSchChangedHostKeyException" ->
+                    "Ключ сервера изменился. Возможна подмена сервера, подключение отменено."
+                e is java.net.UnknownHostException -> "Сервер не найден: ${e.message}"
+                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> "Сервер не отвечает"
+                name == "JSchException" && e.message?.contains("Auth fail") == true -> "Неверный логин или пароль"
+                else -> e.message?.takeIf { it.isNotBlank() } ?: name
+            }
         }
     }
 }

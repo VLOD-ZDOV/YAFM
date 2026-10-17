@@ -154,6 +154,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
             is AppScreen.TextEditor -> {
                 TextEditorScreen(
                     fileItem = screen.file,
+                    repository = viewModel.repository,
                     onNavigateBack = {
                         currentScreen = AppScreen.Explorer
                     }
@@ -181,6 +182,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                         currentScreen = AppScreen.Home
                     },
                     onOpenFile = { file ->
+                        viewModel.navigateToLocal(java.io.File(file.path).parent ?: "/")
                         currentScreen = AppScreen.Explorer
                     }
                 )

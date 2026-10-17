@@ -30,6 +30,10 @@ object ArchiveManager {
         val percentage: Float = 0f
     )
 
+    // Zip Slip: the separator matters, or "/out/x2" would pass as inside "/out/x".
+    private fun isInside(file: File, dir: File): Boolean =
+        file.canonicalPath.startsWith(dir.canonicalPath + File.separator)
+
     fun isArchive(name: String): Boolean {
         val lower = name.lowercase()
         return lower.endsWith(".zip") ||
@@ -50,27 +54,21 @@ object ArchiveManager {
         archiveFile: File,
         targetDirectory: File,
         onProgress: (Progress) -> Unit = {}
-    ): Boolean = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO) {
         if (!targetDirectory.exists()) {
             targetDirectory.mkdirs()
         }
 
         val name = archiveFile.name.lowercase()
-        try {
-            when {
-                name.endsWith(".7z") -> extract7z(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".tar.gz") || name.endsWith(".tgz") -> extractTarGz(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".tar.bz2") || name.endsWith(".tbz2") -> extractTarBz2(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".tar.xz") || name.endsWith(".txz") -> extractTarXz(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".tar") -> extractTar(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".zip") -> extractZip(archiveFile, targetDirectory, onProgress)
-                name.endsWith(".gz") -> extractSingleGz(archiveFile, targetDirectory, onProgress)
-                else -> extractZip(archiveFile, targetDirectory, onProgress)
-            }
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
+        when {
+            name.endsWith(".7z") -> extract7z(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".tar.gz") || name.endsWith(".tgz") -> extractTarGz(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".tar.bz2") || name.endsWith(".tbz2") -> extractTarBz2(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".tar.xz") || name.endsWith(".txz") -> extractTarXz(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".tar") -> extractTar(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".zip") -> extractZip(archiveFile, targetDirectory, onProgress)
+            name.endsWith(".gz") -> extractSingleGz(archiveFile, targetDirectory, onProgress)
+            else -> extractZip(archiveFile, targetDirectory, onProgress)
         }
     }
 
@@ -85,8 +83,8 @@ object ArchiveManager {
             while (zis.nextEntry.also { entry = it } != null) {
                 val currentEntry = entry ?: continue
                 val outputFile = File(targetDir, currentEntry.name)
-                // Prevent Zip Slip vulnerability
-                if (!outputFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+                // Zip Slip, and links: an archive's link could point the next entries outside the target.
+                if (!isInside(outputFile, targetDir) || currentEntry.isUnixSymlink) {
                     continue
                 }
 
@@ -116,7 +114,8 @@ object ArchiveManager {
             while (tis.nextEntry.also { entry = it } != null) {
                 val currentEntry = entry ?: continue
                 val outputFile = File(targetDir, currentEntry.name)
-                if (!outputFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+                // Only files and directories: links and device nodes are skipped.
+                if (!isInside(outputFile, targetDir) || !(currentEntry.isFile || currentEntry.isDirectory)) {
                     continue
                 }
 
@@ -158,7 +157,7 @@ object ArchiveManager {
             var entry = sevenZFile.nextEntry
             while (entry != null) {
                 val outputFile = File(targetDir, entry.name)
-                if (!outputFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+                if (!isInside(outputFile, targetDir)) {
                     entry = sevenZFile.nextEntry
                     continue
                 }
@@ -199,8 +198,8 @@ object ArchiveManager {
         sourceFiles: List<File>,
         destinationZipFile: File,
         onProgress: (Progress) -> Unit = {}
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
+    ) = withContext(Dispatchers.IO) {
+        run {
             destinationZipFile.parentFile?.mkdirs()
             var count = 0
             val allFiles = mutableListOf<Pair<File, String>>()
@@ -230,10 +229,6 @@ object ArchiveManager {
                     zos.closeArchiveEntry()
                 }
             }
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
         }
     }
 }

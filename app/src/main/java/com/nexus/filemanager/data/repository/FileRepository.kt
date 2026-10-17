@@ -1,320 +1,262 @@
 package com.nexus.filemanager.data.repository
 
+import android.content.Context
 import android.os.Environment
 import android.os.StatFs
+import com.nexus.filemanager.data.fs.FileSystem
+import com.nexus.filemanager.data.fs.FtpFileSystem
+import com.nexus.filemanager.data.fs.LocalFileSystem
+import com.nexus.filemanager.data.fs.QshFileSystem
+import com.nexus.filemanager.data.fs.RootFileSystem
+import com.nexus.filemanager.data.fs.SftpFileSystem
+import com.nexus.filemanager.data.fs.SmbFileSystem
+import com.nexus.filemanager.data.fs.joinPath
+import com.nexus.filemanager.data.fs.parentPath
 import com.nexus.filemanager.data.model.FileItem
+import com.nexus.filemanager.data.model.Location
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageStats
 import com.nexus.filemanager.data.model.StorageType
-import com.nexus.filemanager.data.network.FtpClient
-import com.nexus.filemanager.data.network.SftpClient
-import com.nexus.filemanager.data.network.SmbClient
-import com.nexus.filemanager.data.root.RootCommander
-import com.nexus.filemanager.data.root.RootFileProvider
+import com.nexus.filemanager.data.qsh.Qsh
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
+import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
-class FileRepository {
+/** Single entry point to all storages. Keeps one open connection per server until it is edited or deleted. */
+class FileRepository(context: Context) {
 
-    suspend fun listFiles(
-        path: String,
-        storageType: StorageType,
-        serverConfig: ServerConfig? = null
-    ): List<FileItem> = withContext(Dispatchers.IO) {
-        when (storageType) {
-            StorageType.LOCAL -> {
-                val dir = File(path)
-                if (!dir.exists() || !dir.isDirectory) return@withContext emptyList()
-                val files = dir.listFiles() ?: return@withContext emptyList()
+    /** Set once root is confirmed; local access then falls back to root where Android refuses it. */
+    @Volatile
+    var rootGranted = false
 
-                files.map { file ->
-                    val isDir = file.isDirectory
-                    val perms = buildString {
-                        append(if (isDir) "d" else "-")
-                        append(if (file.canRead()) "r" else "-")
-                        append(if (file.canWrite()) "w" else "-")
-                        append(if (file.canExecute()) "x" else "-")
-                    }
-                    FileItem(
-                        name = file.name,
-                        path = file.absolutePath,
-                        size = if (isDir) 0L else file.length(),
-                        isDirectory = isDir,
-                        lastModified = file.lastModified(),
-                        permissions = perms,
-                        storageType = StorageType.LOCAL
-                    )
-                }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            }
-            StorageType.ROOT -> {
-                RootFileProvider.listFiles(path)
-            }
-            StorageType.SMB -> {
-                if (serverConfig == null) emptyList()
-                else SmbClient(serverConfig).listFiles(path)
-            }
-            StorageType.SFTP -> {
-                if (serverConfig == null) emptyList()
-                else SftpClient(serverConfig).listFiles(path)
-            }
-            StorageType.FTP -> {
-                if (serverConfig == null) emptyList()
-                else FtpClient(serverConfig).listFiles(path)
+    val qsh = Qsh(context)
+    val servers = ServerRepository(context) { id -> invalidate(id) }
+
+    private val root = RootFileSystem()
+    private val local = LocalFileSystem(root) { rootGranted }
+    private val remote = ConcurrentHashMap<String, FileSystem>()
+    private val knownHosts = File(context.filesDir, "ssh_known_hosts")
+    private val openCache = File(context.cacheDir, "open").apply { deleteRecursively() }
+
+    private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
+
+    private fun create(config: ServerConfig): FileSystem = when (config.type) {
+        StorageType.SMB -> SmbFileSystem(config)
+        StorageType.SFTP -> SftpFileSystem(config, knownHosts)
+        StorageType.FTP -> FtpFileSystem(config)
+        StorageType.QSH -> QshFileSystem(config, qsh)
+        StorageType.LOCAL, StorageType.ROOT -> error("not a server type")
+    }
+
+    private fun fs(type: StorageType, serverId: String?): FileSystem = when (type) {
+        StorageType.LOCAL -> local
+        StorageType.ROOT -> root
+        else -> {
+            val id = serverId ?: throw IOException("Сервер не указан")
+            remote.getOrPut(id) {
+                create(servers.getServer(id) ?: throw IOException("Сервер удалён"))
             }
         }
     }
 
-    suspend fun readFile(
-        path: String,
-        storageType: StorageType,
-        serverConfig: ServerConfig? = null
-    ): String = withContext(Dispatchers.IO) {
-        when (storageType) {
-            StorageType.LOCAL -> {
-                val file = File(path)
-                if (!file.canRead()) {
-                    // Try fallback to root if local read fails
-                    RootFileProvider.readFile(path)
-                } else {
-                    file.readText(Charsets.UTF_8)
+    private fun fs(item: FileItem) = fs(item.storageType, item.serverId)
+    private fun fs(location: Location) = fs(location.type, location.server?.id)
+
+    fun invalidate(serverId: String) {
+        remote.remove(serverId)?.let { fs -> Thread { runCatching { fs.close() } }.start() }
+    }
+
+    // A hostile server could list names like "../x"; they never reach the UI or a local path.
+    suspend fun list(location: Location): List<FileItem> = io { fs(location).list(location.path).filter { isSafeName(it.name) } }
+
+    /** The configured start directory, else the home directory where the protocol has one. */
+    suspend fun startPath(server: ServerConfig): String = io {
+        server.remotePath.ifEmpty {
+            when (val f = fs(server.type, server.id)) {
+                is SftpFileSystem -> f.home()
+                is QshFileSystem -> f.home()
+                else -> "/"
+            }
+        }
+    }
+
+    suspend fun readText(item: FileItem): String = io {
+        val tooBig = IOException("Файл больше ${MAX_TEXT_SIZE / 1024 / 1024} МБ, откройте его в другом приложении")
+        if (item.size > MAX_TEXT_SIZE) throw tooBig
+        // The listed size comes from the server and may be wrong: the limit holds for what is actually read.
+        val out = java.io.ByteArrayOutputStream()
+        fs(item).openRead(item.path).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+                if (out.size() > MAX_TEXT_SIZE) throw tooBig
+            }
+        }
+        out.toString(Charsets.UTF_8.name())
+    }
+
+    suspend fun writeText(item: FileItem, text: String) = io {
+        fs(item).openWrite(item.path).use { it.write(text.toByteArray(Charsets.UTF_8)) }
+    }
+
+    suspend fun delete(item: FileItem) = io { fs(item).delete(item) }
+
+    suspend fun rename(item: FileItem, newName: String) = io {
+        checkName(newName)
+        fs(item).rename(item.path, joinPath(parentPath(item.path), newName))
+    }
+
+    suspend fun createDirectory(location: Location, name: String) = io {
+        checkName(name)
+        fs(location).mkdir(joinPath(location.path, name))
+    }
+
+    suspend fun createFile(location: Location, name: String) = io {
+        checkName(name)
+        fs(location).createFile(joinPath(location.path, name))
+    }
+
+    suspend fun changePermissions(item: FileItem, octal: String) = io {
+        val mode = octal.takeIf { it.matches(Regex("[0-7]{3,4}")) }?.toInt(8)
+            ?: throw IOException("Неверные права: $octal")
+        fs(item).chmod(item.path, mode)
+    }
+
+    /**
+     * Copies or moves [items] into [dest], across storages if needed. A name already taken in [dest]
+     * gets a " (1)" suffix, so nothing is overwritten. Links to directories are not followed when copying
+     * (a link to `.` would never end); returns how many were skipped.
+     */
+    suspend fun transfer(items: List<FileItem>, dest: Location, move: Boolean, progress: (String) -> Unit): Int = io {
+        var skipped = 0
+        val dst = fs(dest)
+        val taken = dst.list(dest.path).map { it.name }.toMutableSet()
+        items.forEachIndexed { i, item ->
+            progress("${i + 1}/${items.size}: ${item.name}")
+            val src = fs(item)
+            val sameFs = src === dst
+            if (move && sameFs && parentPath(item.path) == dest.path.trimEnd('/').ifEmpty { "/" }) return@forEachIndexed
+            checkName(item.name)
+            val name = uniqueName(item.name, taken)
+            taken += name
+            val target = joinPath(dest.path, name)
+            if (sameFs && item.isDirectory && (target + "/").startsWith(item.path.trimEnd('/') + "/")) {
+                throw IOException("Нельзя скопировать папку ${item.name} внутрь самой себя")
+            }
+            when {
+                move && sameFs -> src.rename(item.path, target)
+                sameFs && src.copyWithin(item, target) -> Unit
+                src is QshFileSystem && dst is LocalFileSystem && name == item.name -> src.download(item, dest.path)
+                dst is QshFileSystem && src is LocalFileSystem && name == item.name ->
+                    dst.upload(item.path, item.isDirectory, dest.path)
+                else -> skipped += copyTree(src, item, dst, target)
+            }
+            if (move && !sameFs) src.delete(item)
+        }
+        skipped
+    }
+
+    private fun copyTree(src: FileSystem, item: FileItem, dst: FileSystem, target: String): Int {
+        if (item.isDirectory && item.isSymlink) return 1
+        var skipped = 0
+        if (item.isDirectory) {
+            dst.mkdir(target)
+            src.list(item.path).forEach {
+                checkName(it.name)
+                skipped += copyTree(src, it, dst, joinPath(target, it.name))
+            }
+        } else {
+            src.openRead(item.path).use { input ->
+                dst.openWrite(target).use { output -> input.copyTo(output, 64 * 1024) }
+            }
+        }
+        return skipped
+    }
+
+    /** A local file for viewers, archives and other apps: the file itself, or a copy in the cache. */
+    suspend fun materialize(item: FileItem): File = io {
+        if (item.storageType == StorageType.LOCAL && File(item.path).canRead()) return@io File(item.path)
+        val dir = File(openCache, (item.storageType.name + item.serverId + item.path).hashCode().toUInt().toString())
+        dir.mkdirs()
+        checkName(item.name)
+        val out = File(dir, item.name)
+        val src = fs(item)
+        if (src is QshFileSystem && !item.isDirectory) {
+            src.download(item, dir.absolutePath)
+        } else {
+            src.openRead(item.path).use { input -> out.outputStream().use { input.copyTo(it, 64 * 1024) } }
+        }
+        out
+    }
+
+    suspend fun checksum(item: FileItem, algorithm: String): String = io {
+        val md = MessageDigest.getInstance(algorithm)
+        fs(item).openRead(item.path).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                md.update(buffer, 0, n)
+            }
+        }
+        md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Connects with a config that may not be saved yet; throws with the reason on failure. */
+    suspend fun testConnection(config: ServerConfig) = io {
+        create(config).use { f ->
+            val start = config.remotePath.ifEmpty {
+                when (f) {
+                    is SftpFileSystem -> f.home()
+                    is QshFileSystem -> f.home()
+                    else -> "/"
                 }
             }
-            StorageType.ROOT -> RootFileProvider.readFile(path)
-            StorageType.SMB -> {
-                serverConfig?.let { SmbClient(it).readFile(path) } ?: throw Exception("Server config missing")
-            }
-            StorageType.SFTP -> {
-                serverConfig?.let { SftpClient(it).readFile(path) } ?: throw Exception("Server config missing")
-            }
-            StorageType.FTP -> {
-                serverConfig?.let { FtpClient(it).readFile(path) } ?: throw Exception("Server config missing")
-            }
+            f.list(start)
         }
+        Unit
     }
 
-    suspend fun writeFile(
-        path: String,
-        content: String,
-        storageType: StorageType,
-        serverConfig: ServerConfig? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        when (storageType) {
-            StorageType.LOCAL -> {
-                val file = File(path)
-                try {
-                    file.writeText(content, Charsets.UTF_8)
-                    true
-                } catch (e: Exception) {
-                    // Escalate to root if permission denied
-                    RootFileProvider.writeFile(path, content)
-                }
-            }
-            StorageType.ROOT -> RootFileProvider.writeFile(path, content)
-            StorageType.SMB -> serverConfig?.let { SmbClient(it).writeFile(path, content) } ?: false
-            StorageType.SFTP -> serverConfig?.let { SftpClient(it).writeFile(path, content) } ?: false
-            StorageType.FTP -> serverConfig?.let { FtpClient(it).writeFile(path, content) } ?: false
-        }
+    suspend fun pairQsh(config: ServerConfig, code: String): String = io {
+        invalidate(config.id)
+        qsh.pair(config, code)
     }
 
-    suspend fun delete(item: FileItem, serverConfig: ServerConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        when (item.storageType) {
-            StorageType.LOCAL -> {
-                val file = File(item.path)
-                val ok = if (file.isDirectory) file.deleteRecursively() else file.delete()
-                if (!ok) {
-                    RootFileProvider.delete(item.path)
-                } else true
-            }
-            StorageType.ROOT -> RootFileProvider.delete(item.path)
-            StorageType.SMB -> serverConfig?.let { SmbClient(it).delete(item.path, item.isDirectory) } ?: false
-            StorageType.SFTP -> serverConfig?.let { SftpClient(it).delete(item.path, item.isDirectory) } ?: false
-            StorageType.FTP -> serverConfig?.let { FtpClient(it).delete(item.path, item.isDirectory) } ?: false
-        }
+    suspend fun getStorageStats(): List<StorageStats> = io {
+        listOfNotNull(
+            runCatching {
+                val internal = Environment.getExternalStorageDirectory()
+                val st = StatFs(internal.path)
+                StorageStats("Основное хранилище", internal.absolutePath, st.totalBytes, st.availableBytes)
+            }.getOrNull(),
+            runCatching {
+                val st = StatFs("/")
+                StorageStats("Системный раздел (Root /)", "/", st.totalBytes, st.availableBytes, isRoot = true)
+            }.getOrNull()
+        )
     }
 
-    suspend fun copy(source: FileItem, targetDir: String, serverConfig: ServerConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        val destPath = if (targetDir.endsWith("/")) "$targetDir${source.name}" else "$targetDir/${source.name}"
-        when (source.storageType) {
-            StorageType.LOCAL -> {
-                try {
-                    val srcFile = File(source.path)
-                    val dstFile = File(destPath)
-                    if (srcFile.isDirectory) {
-                        srcFile.copyRecursively(dstFile, overwrite = true)
-                    } else {
-                        srcFile.copyTo(dstFile, overwrite = true)
-                    }
-                    true
-                } catch (e: Exception) {
-                    RootFileProvider.copy(source.path, destPath)
-                }
-            }
-            StorageType.ROOT -> RootFileProvider.copy(source.path, destPath)
-            else -> false // Network-to-network cross-copy can be done via stream or read/write
-        }
+    private fun isSafeName(name: String) =
+        name.isNotBlank() && name != "." && name != ".." && '/' !in name && '\\' !in name && '\u0000' !in name
+
+    private fun checkName(name: String) {
+        if (!isSafeName(name)) throw IOException("Недопустимое имя: $name")
     }
 
-    suspend fun move(source: FileItem, targetDir: String, serverConfig: ServerConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        val destPath = if (targetDir.endsWith("/")) "$targetDir${source.name}" else "$targetDir/${source.name}"
-        when (source.storageType) {
-            StorageType.LOCAL -> {
-                val srcFile = File(source.path)
-                val dstFile = File(destPath)
-                val moved = srcFile.renameTo(dstFile)
-                if (!moved) {
-                    RootFileProvider.move(source.path, destPath)
-                } else true
-            }
-            StorageType.ROOT -> RootFileProvider.move(source.path, destPath)
-            else -> false
-        }
+    private fun uniqueName(name: String, taken: Set<String>): String {
+        if (name !in taken) return name
+        val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
+        val base = name.substring(0, dot)
+        val ext = name.substring(dot)
+        return generateSequence(1) { it + 1 }.map { "$base ($it)$ext" }.first { it !in taken }
     }
 
-    suspend fun rename(item: FileItem, newName: String, serverConfig: ServerConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        val parent = File(item.path).parent ?: "/"
-        val targetPath = if (parent.endsWith("/")) "$parent$newName" else "$parent/$newName"
-        when (item.storageType) {
-            StorageType.LOCAL -> {
-                val srcFile = File(item.path)
-                val dstFile = File(targetPath)
-                val ok = srcFile.renameTo(dstFile)
-                if (!ok) {
-                    RootFileProvider.move(item.path, targetPath)
-                } else true
-            }
-            StorageType.ROOT -> RootFileProvider.move(item.path, targetPath)
-            else -> false
-        }
-    }
-
-    suspend fun createDirectory(
-        parentPath: String,
-        name: String,
-        storageType: StorageType,
-        serverConfig: ServerConfig? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        val fullPath = if (parentPath.endsWith("/")) "$parentPath$name" else "$parentPath/$name"
-        when (storageType) {
-            StorageType.LOCAL -> {
-                val dir = File(fullPath)
-                val ok = dir.mkdirs()
-                if (!ok) {
-                    RootFileProvider.createDirectory(fullPath)
-                } else true
-            }
-            StorageType.ROOT -> RootFileProvider.createDirectory(fullPath)
-            StorageType.SMB -> serverConfig?.let { SmbClient(it).createDirectory(fullPath) } ?: false
-            StorageType.SFTP -> serverConfig?.let { SftpClient(it).createDirectory(fullPath) } ?: false
-            StorageType.FTP -> serverConfig?.let { FtpClient(it).createDirectory(fullPath) } ?: false
-        }
-    }
-
-    suspend fun createFile(
-        parentPath: String,
-        name: String,
-        storageType: StorageType,
-        serverConfig: ServerConfig? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        val fullPath = if (parentPath.endsWith("/")) "$parentPath$name" else "$parentPath/$name"
-        when (storageType) {
-            StorageType.LOCAL -> {
-                val file = File(fullPath)
-                val ok = file.createNewFile()
-                if (!ok) {
-                    RootFileProvider.createFile(fullPath)
-                } else true
-            }
-            StorageType.ROOT -> RootFileProvider.createFile(fullPath)
-            StorageType.SMB -> serverConfig?.let { SmbClient(it).writeFile(fullPath, "") } ?: false
-            StorageType.SFTP -> serverConfig?.let { SftpClient(it).writeFile(fullPath, "") } ?: false
-            StorageType.FTP -> serverConfig?.let { FtpClient(it).writeFile(fullPath, "") } ?: false
-        }
-    }
-
-    suspend fun changePermissions(
-        item: FileItem,
-        octal: String,
-        serverConfig: ServerConfig? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        when (item.storageType) {
-            StorageType.LOCAL, StorageType.ROOT -> RootCommander.changePermissions(item.path, octal)
-            StorageType.SFTP -> {
-                serverConfig?.let {
-                    val octalInt = octal.toIntOrNull(8) ?: 0x755
-                    SftpClient(it).chmod(item.path, octalInt)
-                } ?: false
-            }
-            else -> false
-        }
-    }
-
-    suspend fun calculateChecksum(item: FileItem, algorithm: String = "MD5"): String = withContext(Dispatchers.IO) {
-        try {
-            val md = MessageDigest.getInstance(algorithm)
-            val file = File(item.path)
-            if (!file.canRead() && item.storageType == StorageType.ROOT) {
-                val res = RootCommander.execute("${algorithm.lowercase()}sum \"${item.path}\"")
-                if (res.isSuccess) {
-                    return@withContext res.stdout.firstOrNull()?.substringBefore(" ") ?: "Error"
-                }
-            }
-            FileInputStream(file).use { fis ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (fis.read(buffer).also { bytesRead = it } != -1) {
-                    md.update(buffer, 0, bytesRead)
-                }
-            }
-            md.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            "Error: ${e.message}"
-        }
-    }
-
-    suspend fun getStorageStats(): List<StorageStats> = withContext(Dispatchers.IO) {
-        val list = mutableListOf<StorageStats>()
-        try {
-            // Internal Storage
-            val internalPath = Environment.getExternalStorageDirectory()
-            val statInternal = StatFs(internalPath.path)
-            val totalInternal = statInternal.totalBytes
-            val freeInternal = statInternal.availableBytes
-            list.add(
-                StorageStats(
-                    label = "Основное хранилище",
-                    path = internalPath.absolutePath,
-                    totalBytes = totalInternal,
-                    freeBytes = freeInternal,
-                    isRoot = false
-                )
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        try {
-            // Root Partition
-            val rootPath = File("/")
-            val statRoot = StatFs(rootPath.path)
-            val totalRoot = statRoot.totalBytes
-            val freeRoot = statRoot.availableBytes
-            list.add(
-                StorageStats(
-                    label = "Системный раздел (Root /)",
-                    path = "/",
-                    totalBytes = totalRoot,
-                    freeBytes = freeRoot,
-                    isRoot = true
-                )
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        list
+    companion object {
+        private const val MAX_TEXT_SIZE = 8L * 1024 * 1024
     }
 }

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
-class ServerRepository(context: Context) {
+class ServerRepository(context: Context, private val onChanged: (String) -> Unit = {}) {
     private val prefs: SharedPreferences = context.getSharedPreferences("nexus_servers", Context.MODE_PRIVATE)
 
     private val _servers = MutableStateFlow<List<ServerConfig>>(emptyList())
@@ -35,9 +35,9 @@ class ServerRepository(context: Context) {
                         host = obj.getString("host"),
                         port = obj.getInt("port"),
                         username = obj.optString("username", ""),
-                        password = obj.optString("password", ""),
+                        password = readPassword(obj),
                         shareName = obj.optString("shareName", ""),
-                        remotePath = obj.optString("remotePath", "/"),
+                        remotePath = obj.optString("remotePath", ""),
                         isAnonymous = obj.optBoolean("isAnonymous", false)
                     )
                 )
@@ -46,7 +46,16 @@ class ServerRepository(context: Context) {
             e.printStackTrace()
         }
         _servers.value = list
+        // Older versions stored passwords in clear text: rewrite them encrypted.
+        if (jsonString.contains("\"password\"")) persist(list)
     }
+
+    private fun readPassword(obj: JSONObject): String =
+        if (obj.has("passwordEnc")) {
+            runCatching { SecretBox.decrypt(obj.getString("passwordEnc")) }.getOrDefault("")
+        } else {
+            obj.optString("password", "")
+        }
 
     fun saveServer(config: ServerConfig) {
         val current = _servers.value.toMutableList()
@@ -57,11 +66,13 @@ class ServerRepository(context: Context) {
             current.add(config)
         }
         persist(current)
+        onChanged(config.id)
     }
 
     fun deleteServer(id: String) {
         val current = _servers.value.filter { it.id != id }
         persist(current)
+        onChanged(id)
     }
 
     fun getServer(id: String): ServerConfig? {
@@ -78,7 +89,7 @@ class ServerRepository(context: Context) {
                 put("host", server.host)
                 put("port", server.port)
                 put("username", server.username)
-                put("password", server.password)
+                put("passwordEnc", SecretBox.encrypt(server.password))
                 put("shareName", server.shareName)
                 put("remotePath", server.remotePath)
                 put("isAnonymous", server.isAnonymous)

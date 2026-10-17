@@ -58,6 +58,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -111,6 +116,11 @@ fun ExplorerScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val archiveProgress by viewModel.archiveProgress.collectAsState()
     val isArchiveProcessing by viewModel.isArchiveProcessing.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     var isSearchActive by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -124,7 +134,7 @@ fun ExplorerScreen(
     var showBatchRenameDialog by remember { mutableStateOf(false) }
     var extractTarget by remember { mutableStateOf<FileItem?>(null) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
-    var deleteConfirmTarget by remember { mutableStateOf<FileItem?>(null) }
+    var deleteConfirmTargets by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var permissionsTarget by remember { mutableStateOf<FileItem?>(null) }
     var detailsTarget by remember { mutableStateOf<FileItem?>(null) }
 
@@ -170,14 +180,14 @@ fun ExplorerScreen(
     extractTarget?.let { item ->
         ExtractArchiveDialog(
             archiveItem = item,
-            currentPath = currentPath,
+            currentPath = viewModel.archiveOutputDir(),
             progress = archiveProgress,
             isExtracting = isArchiveProcessing,
             onDismiss = { extractTarget = null },
             onExtract = { dest ->
                 viewModel.extractArchive(item, dest) {
                     extractTarget = null
-                    Toast.makeText(context, "Архив успешно распакован", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Распаковано в $dest", Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -192,7 +202,6 @@ fun ExplorerScreen(
             onCompress = { archiveName ->
                 viewModel.compressSelected(archiveName) {
                     showCompressDialog = false
-                    Toast.makeText(context, "Архив успешно создан", Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -205,7 +214,6 @@ fun ExplorerScreen(
             onApply = { prefix, suffix, find, replace, addIndex ->
                 viewModel.batchRenameSelected(prefix, suffix, find, replace, addIndex)
                 showBatchRenameDialog = false
-                Toast.makeText(context, "Файлы переименованы", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -221,25 +229,30 @@ fun ExplorerScreen(
         )
     }
 
-    deleteConfirmTarget?.let { item ->
+    if (deleteConfirmTargets.isNotEmpty()) {
+        val targets = deleteConfirmTargets
         AlertDialog(
-            onDismissRequest = { deleteConfirmTarget = null },
-            title = { Text("Удалить файл?") },
-            text = { Text("Вы действительно хотите удалить «${item.name}»? Это действие нельзя отменить.") },
+            onDismissRequest = { deleteConfirmTargets = emptyList() },
+            title = { Text(if (targets.size == 1) "Удалить?" else "Удалить ${targets.size} объектов?") },
+            text = {
+                Text(
+                    if (targets.size == 1) "«${targets[0].name}» будет удалён без возможности восстановления."
+                    else "Выбранные объекты будут удалены без возможности восстановления."
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.toggleSelection(item)
-                        viewModel.deleteSelected {
-                            deleteConfirmTarget = null
-                        }
+                        viewModel.clearSelection()
+                        viewModel.deleteItems(targets)
+                        deleteConfirmTargets = emptyList()
                     }
                 ) {
                     Text("Удалить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteConfirmTarget = null }) {
+                TextButton(onClick = { deleteConfirmTargets = emptyList() }) {
                     Text("Отмена")
                 }
             }
@@ -260,6 +273,7 @@ fun ExplorerScreen(
     detailsTarget?.let { item ->
         FileDetailsDialog(
             item = item,
+            repository = viewModel.repository,
             onDismiss = { detailsTarget = null }
         )
     }
@@ -269,12 +283,16 @@ fun ExplorerScreen(
             TopAppBar(
                 title = {
                     if (isSearchActive) {
+                        val focusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
                             placeholder = { Text("Поиск в этой папке...") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
                             trailingIcon = {
                                 IconButton(onClick = {
                                     isSearchActive = false
@@ -479,7 +497,8 @@ fun ExplorerScreen(
             }
         },
         bottomBar = {
-            Column {
+            // Edge-to-edge: keeps the bars (and the FAB above them) clear of the system navigation bar.
+            Column(modifier = Modifier.navigationBarsPadding()) {
                 PasteFloatingBar(
                     itemCount = clipboardItems.size,
                     operation = clipboardOp,
@@ -497,12 +516,12 @@ fun ExplorerScreen(
                     onCopy = { viewModel.copySelected() },
                     onCut = { viewModel.cutSelected() },
                     onDelete = {
-                        viewModel.deleteSelected {}
+                        deleteConfirmTargets = selectedItems.toList()
                     },
                     onPermissions = {
                         selectedItems.firstOrNull()?.let { permissionsTarget = it }
                     },
-                    canChangePermissions = storageType == StorageType.ROOT || storageType == StorageType.LOCAL,
+                    canChangePermissions = storageType != StorageType.SMB,
                     onExtract = {
                         val archive = selectedItems.firstOrNull { ArchiveManager.isArchive(it.name) }
                         if (archive != null) {
@@ -524,6 +543,17 @@ fun ExplorerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            progress?.let { text ->
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
             // Breadcrumbs Navigation Bar
             BreadcrumbBar(
                 segments = viewModel.getBreadcrumbs(),
@@ -603,7 +633,7 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            handleFileClick(item, onOpenFileInEditor, onOpenImage, context)
+                                            handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {
@@ -631,14 +661,14 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            handleFileClick(item, onOpenFileInEditor, onOpenImage, context)
+                                            handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {
                                         viewModel.toggleSelection(item)
                                     },
                                     onRename = { renameTarget = item },
-                                    onDelete = { deleteConfirmTarget = item },
+                                    onDelete = { deleteConfirmTargets = listOf(item) },
                                     onPermissions = { permissionsTarget = item },
                                     onDetails = { detailsTarget = item }
                                 )
@@ -653,30 +683,23 @@ fun ExplorerScreen(
 
 private fun handleFileClick(
     item: FileItem,
+    viewModel: FileExplorerViewModel,
     onOpenEditor: (FileItem) -> Unit,
     onOpenImage: (FileItem) -> Unit,
     context: Context
 ) {
     when (item.category) {
         FileCategory.CODE, FileCategory.TEXT -> onOpenEditor(item)
-        FileCategory.IMAGE -> onOpenImage(item)
-        else -> openExternalIntent(context, item)
+        FileCategory.IMAGE -> viewModel.withLocalCopy(item) { file ->
+            onOpenImage(item.copy(path = file.absolutePath, storageType = StorageType.LOCAL, serverId = null))
+        }
+        else -> viewModel.withLocalCopy(item) { file -> openExternalIntent(context, item, file) }
     }
 }
 
-private fun openExternalIntent(context: Context, item: FileItem) {
+private fun openExternalIntent(context: Context, item: FileItem, file: File) {
     try {
-        val file = File(item.path)
-        val uri: Uri = if (file.exists()) {
-            FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-        } else {
-            Uri.parse(item.path)
-        }
-
+        val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, item.mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

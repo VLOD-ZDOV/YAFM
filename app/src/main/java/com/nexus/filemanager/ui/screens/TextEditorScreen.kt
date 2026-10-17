@@ -59,16 +59,18 @@ import kotlinx.coroutines.launch
 @Composable
 fun TextEditorScreen(
     fileItem: FileItem,
+    repository: FileRepository,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repo = remember { FileRepository() }
 
     var content by remember { mutableStateOf("") }
     var originalContent by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
+    // Saving after a failed read would replace the file with whatever was typed into the empty editor.
+    var loadFailed by remember { mutableStateOf(false) }
     var fontSize by remember { mutableFloatStateOf(13f) }
 
     val isModified = content != originalContent
@@ -80,10 +82,11 @@ fun TextEditorScreen(
     LaunchedEffect(fileItem.path) {
         isLoading = true
         try {
-            val text = repo.readFile(fileItem.path, fileItem.storageType, null)
+            val text = repository.readText(fileItem)
             content = text
             originalContent = text
         } catch (e: Exception) {
+            loadFailed = true
             Toast.makeText(context, "Ошибка чтения: ${e.message}", Toast.LENGTH_LONG).show()
         } finally {
             isLoading = false
@@ -137,17 +140,18 @@ fun TextEditorScreen(
                         onClick = {
                             isSaving = true
                             scope.launch {
-                                val ok = repo.writeFile(fileItem.path, content, fileItem.storageType, null)
-                                isSaving = false
-                                if (ok) {
+                                try {
+                                    repository.writeText(fileItem, content)
                                     originalContent = content
-                                    Toast.makeText(context, "Файл успешно сохранен", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Не удалось сохранить файл", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Файл сохранён", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Не удалось сохранить: ${e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isSaving = false
                                 }
                             }
                         },
-                        enabled = isModified && !isSaving
+                        enabled = isModified && !isSaving && !loadFailed
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp))

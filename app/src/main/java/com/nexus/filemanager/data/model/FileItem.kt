@@ -1,5 +1,6 @@
 package com.nexus.filemanager.data.model
 
+import android.webkit.MimeTypeMap
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -24,14 +25,18 @@ data class FileItem(
     val isDirectory: Boolean = false,
     val lastModified: Long = 0L,
     val permissions: String = if (isDirectory) "rwxr-xr-x" else "rw-r--r--",
-    val owner: String = "root",
-    val group: String = "root",
+    val owner: String = "",
+    val group: String = "",
     val storageType: StorageType = StorageType.LOCAL,
     val serverId: String? = null,
-    val mimeType: String = "*/*"
+    /** A symbolic link; `isDirectory` then tells what it points to. Recursive operations never follow it. */
+    val isSymlink: Boolean = false
 ) {
     val extension: String
         get() = if (isDirectory) "" else name.substringAfterLast('.', "").lowercase()
+
+    val mimeType: String
+        get() = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
 
     val isHidden: Boolean
         get() = name.startsWith(".")

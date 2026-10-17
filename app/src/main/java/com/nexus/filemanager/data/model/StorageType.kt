@@ -5,5 +5,6 @@ enum class StorageType {
     ROOT,
     SMB,
     SFTP,
-    FTP
+    FTP,
+    QSH
 }
