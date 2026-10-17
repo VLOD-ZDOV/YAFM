@@ -12,6 +12,7 @@ import java.io.File
 class MediaIndex(private val context: Context) {
 
     private val home = Environment.getExternalStorageDirectory().absolutePath
+    private val homeCanonical = File(home).canonicalPath
 
     fun query(category: FileCategory): List<FileItem> {
         val (selection, args) = when (category) {
@@ -38,11 +39,14 @@ class MediaIndex(private val context: Context) {
             "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
         )?.use { c ->
             while (c.moveToNext()) {
-                val path = c.getString(0) ?: continue
-                // The index may still list files that were deleted a moment ago.
-                if (!File(path).isFile) continue
+                val raw = c.getString(0) ?: continue
+                // Index rows are not trusted: "home/../.." would pass the LIKE above. Only real files
+                // inside internal storage count (the index may also still list deleted ones).
+                val file = runCatching { File(raw).canonicalFile }.getOrNull() ?: continue
+                val path = file.path
+                if (!path.startsWith(homeCanonical + File.separator) || !file.isFile) continue
                 items += FileItem(
-                    name = path.substringAfterLast('/'),
+                    name = file.name,
                     path = path,
                     size = c.getLong(1),
                     lastModified = c.getLong(2) * 1000L,
