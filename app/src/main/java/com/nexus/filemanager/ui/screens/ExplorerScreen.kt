@@ -107,7 +107,8 @@ fun ExplorerScreen(
     onNavigateBack: () -> Unit,
     onOpenFileInEditor: (FileItem) -> Unit,
     onOpenImage: (FileItem) -> Unit,
-    onOpenVideo: (java.io.File, List<java.io.File>) -> Unit
+    onOpenVideo: (java.io.File, List<java.io.File>) -> Unit,
+    onOpenAudio: (java.io.File, List<java.io.File>) -> Unit
 ) {
     val context = LocalContext.current
     val currentPath by viewModel.currentPath.collectAsState()
@@ -173,6 +174,15 @@ fun ExplorerScreen(
                 fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }
             } else listOf(file)
             onOpenVideo(file, playlist)
+        }
+    }
+
+    fun playAudio(item: FileItem) {
+        viewModel.withLocalCopy(item) { file ->
+            val playlist = if (item.storageType == StorageType.LOCAL) {
+                fileList.filter { it.category == FileCategory.AUDIO }.map { java.io.File(it.path) }
+            } else listOf(file)
+            onOpenAudio(file, playlist)
         }
     }
 
@@ -685,7 +695,7 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            if (item.category == FileCategory.VIDEO) openVideo(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+                                            if (item.category == FileCategory.VIDEO) openVideo(item) else if (item.category == FileCategory.AUDIO) playAudio(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {
@@ -714,7 +724,7 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            if (item.category == FileCategory.VIDEO) openVideo(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+                                            if (item.category == FileCategory.VIDEO) openVideo(item) else if (item.category == FileCategory.AUDIO) playAudio(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {

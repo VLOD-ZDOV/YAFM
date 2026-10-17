@@ -34,6 +34,7 @@ import com.nexus.filemanager.ui.screens.ImageViewerScreen
 import com.nexus.filemanager.ui.screens.RootTerminalScreen
 import com.nexus.filemanager.ui.screens.SettingsScreen
 import com.nexus.filemanager.ui.screens.VideoPlayerScreen
+import com.nexus.filemanager.ui.screens.AudioPlayerScreen
 import com.nexus.filemanager.ui.components.UpdateDialog
 import com.nexus.filemanager.ui.screens.StorageAnalyzerScreen
 import com.nexus.filemanager.ui.screens.TextEditorScreen
@@ -50,6 +51,7 @@ sealed class AppScreen {
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
     data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
+    data class AudioPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -165,6 +167,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     },
                     onOpenVideo = { file, playlist ->
                         currentScreen = AppScreen.VideoPlayer(file, playlist)
+                    },
+                    onOpenAudio = { file, playlist ->
+                        currentScreen = AppScreen.AudioPlayer(file, playlist)
                     }
                 )
             }
@@ -206,6 +211,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
             }
             is AppScreen.VideoPlayer -> {
                 VideoPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = AppScreen.Explorer })
+            }
+            is AppScreen.AudioPlayer -> {
+                AudioPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = AppScreen.Explorer })
             }
             is AppScreen.Settings -> {
                 SettingsScreen(viewModel = viewModel, onNavigateBack = { currentScreen = AppScreen.Home })

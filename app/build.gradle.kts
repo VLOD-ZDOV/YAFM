@@ -99,6 +99,10 @@ dependencies {
     // Video player. 3.7.3+ need compileSdk 37 and a newer Gradle plugin.
     implementation("org.videolan.android:libvlc-all:3.7.2")
 
+    // Audio player with background playback. 1.10+ need compileSdk 36.
+    implementation("androidx.media3:media3-exoplayer:1.9.3")
+    implementation("androidx.media3:media3-session:1.9.3")
+
     // Archives (ZIP, TAR, GZ, BZ2, XZ, 7Z)
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.10")
