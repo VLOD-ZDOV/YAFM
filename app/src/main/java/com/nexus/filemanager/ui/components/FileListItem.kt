@@ -1,5 +1,12 @@
 package com.nexus.filemanager.ui.components
 
+import java.io.File
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import coil.request.videoFrameMillis
+import coil.request.ImageRequest
+import coil.compose.AsyncImage
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -221,6 +228,9 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier) {
         FileCategory.OTHER -> Pair(Icons.AutoMirrored.Filled.InsertDriveFile, TextColor)
     }
 
+    // Previews only for files the app can read directly; remote and root files keep the icon.
+    val preview = item.storageType == StorageType.LOCAL &&
+        (item.category == FileCategory.IMAGE || item.category == FileCategory.VIDEO)
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = tint.copy(alpha = 0.15f),
@@ -233,6 +243,23 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier) {
                 tint = tint,
                 modifier = Modifier.size(24.dp)
             )
+            if (preview) {
+                val context = LocalContext.current
+                val request = remember(item.path, item.lastModified) {
+                    ImageRequest.Builder(context)
+                        .data(File(item.path))
+                        .size(256)
+                        .videoFrameMillis(1000)
+                        .memoryCacheKey("thumb:${item.path}:${item.lastModified}")
+                        .build()
+                }
+                AsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }

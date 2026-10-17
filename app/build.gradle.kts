@@ -94,6 +94,7 @@ dependencies {
 
     // Image previews
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-video:2.7.0")
 
     // Archives (ZIP, TAR, GZ, BZ2, XZ, 7Z)
     implementation("org.apache.commons:commons-compress:1.27.1")
