@@ -12,6 +12,7 @@ import com.nexus.filemanager.data.fs.SftpFileSystem
 import com.nexus.filemanager.data.fs.SmbFileSystem
 import com.nexus.filemanager.data.fs.joinPath
 import com.nexus.filemanager.data.fs.parentPath
+import com.nexus.filemanager.data.media.MediaIndex
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.Location
 import com.nexus.filemanager.data.model.ServerConfig
@@ -40,6 +41,7 @@ class FileRepository(context: Context) {
     private val remote = ConcurrentHashMap<String, FileSystem>()
     private val knownHosts = File(context.filesDir, "ssh_known_hosts")
     private val openCache = File(context.cacheDir, "open").apply { deleteRecursively() }
+    private val media = MediaIndex(context)
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
@@ -70,7 +72,10 @@ class FileRepository(context: Context) {
     }
 
     // A hostile server could list names like "../x"; they never reach the UI or a local path.
-    suspend fun list(location: Location): List<FileItem> = io { fs(location).list(location.path).filter { isSafeName(it.name) } }
+    suspend fun list(location: Location): List<FileItem> = io {
+        location.category?.let { return@io media.query(it) }
+        fs(location).list(location.path).filter { isSafeName(it.name) }
+    }
 
     /** The configured start directory, else the home directory where the protocol has one. */
     suspend fun startPath(server: ServerConfig): String = io {

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.filemanager.YafmApp
 import com.nexus.filemanager.data.archive.ArchiveManager
 import com.nexus.filemanager.data.fs.joinPath
+import com.nexus.filemanager.data.model.FileCategory
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.Location
 import com.nexus.filemanager.data.model.RootInfo
@@ -187,6 +188,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun navigateToLocal(path: String) = enter(Location(StorageType.LOCAL, path))
 
+    fun openCategory(category: FileCategory) = enter(Location(StorageType.LOCAL, internalRoot, category = category))
+
     fun navigateToServer(server: ServerConfig) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -209,6 +212,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun getBreadcrumbs(): List<PathSegment> {
         val loc = _location.value
+        loc.category?.let { return listOf(PathSegment(categoryTitle(it), "")) }
         val base = when (loc.type) {
             StorageType.LOCAL -> if (loc.path.startsWith(internalRoot)) internalRoot else "/"
             else -> "/"
@@ -225,6 +229,15 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             segments += PathSegment(part, cumulative)
         }
         return segments
+    }
+
+    fun categoryTitle(category: FileCategory) = when (category) {
+        FileCategory.IMAGE -> "Все изображения"
+        FileCategory.VIDEO -> "Все видео"
+        FileCategory.AUDIO -> "Вся музыка"
+        FileCategory.DOCUMENT -> "Все документы"
+        FileCategory.ARCHIVE -> "Все архивы"
+        else -> category.name
     }
 
     // Search and sort

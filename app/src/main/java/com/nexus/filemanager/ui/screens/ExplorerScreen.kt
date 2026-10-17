@@ -327,7 +327,8 @@ fun ExplorerScreen(
                         )
                     } else {
                         Column {
-                            val folderName = currentPath.substringAfterLast('/').ifEmpty { "/" }
+                            val folderName = location.category?.let { viewModel.categoryTitle(it) }
+                                ?: currentPath.substringAfterLast('/').ifEmpty { "/" }
                             Text(
                                 text = folderName,
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -447,7 +448,8 @@ fun ExplorerScreen(
             )
         },
         floatingActionButton = {
-            if (!isSelectionMode) {
+            // A category is not a folder: nothing can be created or pasted into it.
+            if (!isSelectionMode && location.category == null) {
                 Column(horizontalAlignment = Alignment.End) {
                     AnimatedVisibility(visible = showFabMenu) {
                         Column(
@@ -513,7 +515,7 @@ fun ExplorerScreen(
             // Edge-to-edge: keeps the bars (and the FAB above them) clear of the system navigation bar.
             Column(modifier = Modifier.navigationBarsPadding()) {
                 PasteFloatingBar(
-                    itemCount = clipboardItems.size,
+                    itemCount = if (location.category == null) clipboardItems.size else 0,
                     operation = clipboardOp,
                     onPaste = { viewModel.pasteClipboard() },
                     onCancel = { viewModel.clearClipboard() }
@@ -571,7 +573,7 @@ fun ExplorerScreen(
             BreadcrumbBar(
                 segments = viewModel.getBreadcrumbs(),
                 onSegmentClick = { segment ->
-                    viewModel.navigateTo(segment.fullPath)
+                    if (location.category == null) viewModel.navigateTo(segment.fullPath)
                 }
             )
 

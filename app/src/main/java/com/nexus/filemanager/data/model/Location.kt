@@ -4,5 +4,7 @@ package com.nexus.filemanager.data.model
 data class Location(
     val type: StorageType,
     val path: String,
-    val server: ServerConfig? = null
+    val server: ServerConfig? = null,
+    /** Not a directory: every file of this kind in internal storage. */
+    val category: FileCategory? = null
 )

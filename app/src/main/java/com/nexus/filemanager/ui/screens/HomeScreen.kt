@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nexus.filemanager.data.model.FileCategory
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.ui.components.ServerDialog
 import com.nexus.filemanager.ui.components.StorageGaugeCard
@@ -94,7 +95,9 @@ data class CategoryItem(
     val title: String,
     val icon: ImageVector,
     val color: Color,
-    val path: String
+    val path: String,
+    /** Set: all files of this kind; null: open [path]. */
+    val category: FileCategory? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,11 +122,11 @@ fun HomeScreen(
         val root = Environment.getExternalStorageDirectory().absolutePath
         listOf(
             CategoryItem("Загрузки", Icons.Default.Download, NexusBluePrimary, "$root/Download"),
-            CategoryItem("Изображения", Icons.Default.Image, ImageColor, "$root/DCIM"),
-            CategoryItem("Видео", Icons.Default.Movie, VideoColor, "$root/Movies"),
-            CategoryItem("Музыка", Icons.Default.MusicNote, AudioColor, "$root/Music"),
-            CategoryItem("Документы", Icons.Default.Description, DocumentColor, "$root/Documents"),
-            CategoryItem("Архивы", Icons.Default.Archive, ArchiveColor, "$root/Download")
+            CategoryItem("Изображения", Icons.Default.Image, ImageColor, root, FileCategory.IMAGE),
+            CategoryItem("Видео", Icons.Default.Movie, VideoColor, root, FileCategory.VIDEO),
+            CategoryItem("Музыка", Icons.Default.MusicNote, AudioColor, root, FileCategory.AUDIO),
+            CategoryItem("Документы", Icons.Default.Description, DocumentColor, root, FileCategory.DOCUMENT),
+            CategoryItem("Архивы", Icons.Default.Archive, ArchiveColor, root, FileCategory.ARCHIVE)
         )
     }
 
@@ -268,7 +271,7 @@ fun HomeScreen(
                         CategoryCard(
                             category = cat,
                             onClick = {
-                                viewModel.navigateToLocal(cat.path)
+                                cat.category?.let { viewModel.openCategory(it) } ?: viewModel.navigateToLocal(cat.path)
                                 onNavigateToExplorer()
                             },
                             modifier = Modifier.weight(1f)
@@ -284,7 +287,7 @@ fun HomeScreen(
                         CategoryCard(
                             category = cat,
                             onClick = {
-                                viewModel.navigateToLocal(cat.path)
+                                cat.category?.let { viewModel.openCategory(it) } ?: viewModel.navigateToLocal(cat.path)
                                 onNavigateToExplorer()
                             },
                             modifier = Modifier.weight(1f)
