@@ -133,22 +133,42 @@ fun VideoPlayerScreen(
         prefs.edit().putLong(current.absolutePath, if (l > 0 && t < l - 5_000) t else 0L).apply()
     }
 
-    fun open(f: File) {
+    /** [startAt]: where to begin, in ms; by default where this file was left. */
+    fun open(f: File, startAt: Long? = null) {
         if (player.media != null) savePosition()
         current = f
         val media = Media(libVlc, Uri.fromFile(f))
         media.setHWDecoderEnabled(true, false)
+        // A seek right after play() is ignored while the file is still opening: libVLC starts there itself.
+        val start = startAt ?: prefs.getLong(f.absolutePath, 0L)
+        if (start > 0) media.addOption(":start-time=${start / 1000.0}")
         player.media = media
         media.release()
         player.play()
-        val resume = prefs.getLong(f.absolutePath, 0L)
-        if (resume > 0) player.setTime(resume)
     }
 
-    fun seekBy(ms: Long) {
-        player.setTime((player.time + ms).coerceIn(0L, maxOf(player.length, 0L)))
+    // After the end libVLC is stopped and ignores seeks: the file is opened again first.
+    var ended by remember { mutableStateOf(false) }
+
+    fun restartIfEnded(): Boolean {
+        if (!ended) return false
+        ended = false
+        open(current, 0L)
+        return true
+    }
+
+    fun seekTo(ms: Long) {
+        val target = ms.coerceIn(0L, maxOf(player.length, length, 0L))
+        if (ended) {
+            ended = false
+            open(current, target)
+        } else {
+            player.setTime(target)
+        }
         touch()
     }
+
+    fun seekBy(ms: Long) = seekTo((if (ended) length else player.time) + ms)
 
     val index = playlist.indexOfFirst { it.absolutePath == current.absolutePath }
 
@@ -167,18 +187,14 @@ fun VideoPlayerScreen(
                 MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> playing = false
                 MediaPlayer.Event.TimeChanged -> time = e.timeChanged
                 MediaPlayer.Event.LengthChanged -> length = e.lengthChanged
-                MediaPlayer.Event.Vout -> player.currentVideoTrack?.let { v ->
-                    // Turn the screen the way the video is: wide films go landscape.
-                    // Orientations 4..7 are the transposed ones (rotated by 90 or 270 degrees).
-                    val (w, h) = if (v.orientation in 4..7) v.height to v.width else v.width to v.height
-                    activity.requestedOrientation = if (w > h) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                }
                 MediaPlayer.Event.EndReached -> {
                     playing = false
                     prefs.edit().putLong(current.absolutePath, 0L).apply()
                     val next = playlist.getOrNull(playlist.indexOfFirst { it.absolutePath == current.absolutePath } + 1)
-                    if (next != null) open(next)
+                    if (next != null) open(next) else {
+                        ended = true
+                        controls = true
+                    }
                 }
             }
         }
@@ -195,6 +211,22 @@ fun VideoPlayerScreen(
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             window.attributes = window.attributes.apply { screenBrightness = brightness }
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Turn the screen the way the video is: wide films go landscape. libVLC knows the frame size
+    // only some time after playback starts, so it is looked up until it is there.
+    LaunchedEffect(current) {
+        repeat(50) {
+            val v = player.currentVideoTrack
+            if (v != null && v.width > 0 && v.height > 0) {
+                // Orientations 4..7 are the transposed ones (rotated by 90 or 270 degrees).
+                val (w, h) = if (v.orientation in 4..7) v.height to v.width else v.width to v.height
+                activity.requestedOrientation = if (w > h) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                return@LaunchedEffect
+            }
+            delay(200)
         }
     }
 
@@ -265,7 +297,7 @@ fun VideoPlayerScreen(
                             if (start.x < size.width / 2) mode = -2 else mode = -3
                         },
                         onDragEnd = {
-                            seekDrag?.let { player.setTime(it.toLong()) }
+                            seekDrag?.let { seekTo(it.toLong()) }
                             seekDrag = null
                         },
                         onDrag = { change, drag ->
@@ -330,21 +362,13 @@ fun VideoPlayerScreen(
                     .background(Color.Black.copy(alpha = 0.35f))
                     .safeDrawingPadding()
             ) {
-                // Top: title and options
-                Row(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Top: options, and the title on a line of its own so narrow screens still show it
+                Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back), tint = Color.White)
                     }
-                    Text(
-                        current.name,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(Modifier.weight(1f))
                     Box {
                         IconButton(onClick = { menu = "audio"; touch() }) {
                             Icon(Icons.Default.Audiotrack, contentDescription = str(R.string.audio_track), tint = Color.White)
@@ -407,6 +431,15 @@ fun VideoPlayerScreen(
                         Icon(Icons.Default.LockOpen, contentDescription = str(R.string.lock), tint = Color.White)
                     }
                 }
+                Text(
+                    current.name,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                }
 
                 // Center: previous, rewind, play, forward, next
                 Row(
@@ -421,7 +454,12 @@ fun VideoPlayerScreen(
                         Icon(Icons.Default.Replay10, contentDescription = str(R.string.s_10_s_2), tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(
-                        onClick = { if (player.isPlaying) player.pause() else player.play(); touch() },
+                        onClick = {
+                            if (!restartIfEnded()) {
+                                if (player.isPlaying) player.pause() else player.play()
+                            }
+                            touch()
+                        },
                         modifier = Modifier.size(72.dp)
                     ) {
                         Icon(
@@ -448,7 +486,7 @@ fun VideoPlayerScreen(
                     Slider(
                         value = sliding ?: seekDrag ?: time.toFloat(),
                         onValueChange = { sliding = it; touch() },
-                        onValueChangeFinished = { sliding?.let { player.setTime(it.toLong()) }; sliding = null },
+                        onValueChangeFinished = { sliding?.let { seekTo(it.toLong()) }; sliding = null },
                         valueRange = 0f..maxOf(length.toFloat(), 1f),
                         colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White)
                     )
