@@ -25,6 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,7 +54,9 @@ fun FileDetailsDialog(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    var md5Hash by remember { mutableStateOf<String?>(null) }
+    var hashes by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var hashError by remember { mutableStateOf<String?>(null) }
+    var hashProgress by remember { mutableFloatStateOf(0f) }
     var isCalculatingHash by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -93,53 +97,41 @@ fun FileDetailsDialog(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Контрольная сумма (MD5)",
+                                text = "Контрольные суммы",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
-
                             Spacer(modifier = Modifier.height(6.dp))
-
-                            if (md5Hash == null) {
-                                OutlinedButton(
+                            val result = hashes
+                            when {
+                                result != null -> {
+                                    HashRow("MD5", result.first) {
+                                        clipboardManager.setText(AnnotatedString(result.first))
+                                        Toast.makeText(context, "MD5 скопирован", Toast.LENGTH_SHORT).show()
+                                    }
+                                    HashRow("SHA-256", result.second) {
+                                        clipboardManager.setText(AnnotatedString(result.second))
+                                        Toast.makeText(context, "SHA-256 скопирован", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                hashError != null -> Text(hashError ?: "", color = MaterialTheme.colorScheme.error)
+                                isCalculatingHash -> LinearProgressIndicator(
+                                    progress = { hashProgress },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                else -> OutlinedButton(
                                     onClick = {
                                         isCalculatingHash = true
                                         scope.launch {
-                                            md5Hash = runCatching { repository.checksum(item, "MD5") }
-                                                .getOrElse { "Ошибка: ${it.message}" }
+                                            runCatching { repository.checksums(item) { hashProgress = it } }
+                                                .onSuccess { hashes = it }
+                                                .onFailure { hashError = "Ошибка: ${it.message}" }
                                             isCalculatingHash = false
                                         }
                                     },
-                                    enabled = !isCalculatingHash,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    if (isCalculatingHash) {
-                                        CircularProgressIndicator(modifier = Modifier.height(16.dp))
-                                    } else {
-                                        Text("Вычислить MD5")
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = md5Hash ?: "",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = 11.sp
-                                        ),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(md5Hash ?: ""))
-                                            Toast.makeText(context, "Хеш скопирован", Toast.LENGTH_SHORT).show()
-                                        }
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
-                                    }
+                                    Text("Вычислить MD5 и SHA-256")
                                 }
                             }
                         }
@@ -196,6 +188,22 @@ private fun DetailRowWithCopy(label: String, value: String, onCopy: () -> Unit) 
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun HashRow(label: String, value: String, onCopy: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            )
+        }
+        IconButton(onClick = onCopy) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
         }
     }
 }

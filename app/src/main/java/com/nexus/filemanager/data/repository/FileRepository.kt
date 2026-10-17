@@ -194,17 +194,33 @@ class FileRepository(context: Context) {
         out
     }
 
-    suspend fun checksum(item: FileItem, algorithm: String): String = io {
-        val md = MessageDigest.getInstance(algorithm)
+    /** MD5 and SHA-256 in one pass over the file. */
+    suspend fun checksums(item: FileItem, progress: (Float) -> Unit = {}): Pair<String, String> = io {
+        val md5 = MessageDigest.getInstance("MD5")
+        val sha256 = MessageDigest.getInstance("SHA-256")
         fs(item).openRead(item.path).use { input ->
-            val buffer = ByteArray(64 * 1024)
+            val buffer = ByteArray(1024 * 1024)
+            var done = 0L
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                md.update(buffer, 0, n)
+                md5.update(buffer, 0, n)
+                sha256.update(buffer, 0, n)
+                done += n
+                if (item.size > 0) progress((done.toFloat() / item.size).coerceAtMost(1f))
             }
         }
-        md.digest().joinToString("") { "%02x".format(it) }
+        hex(md5.digest()) to hex(sha256.digest())
+    }
+
+    private fun hex(bytes: ByteArray): String {
+        val digits = "0123456789abcdef"
+        val out = CharArray(bytes.size * 2)
+        bytes.forEachIndexed { i, b ->
+            out[i * 2] = digits[(b.toInt() shr 4) and 0xf]
+            out[i * 2 + 1] = digits[b.toInt() and 0xf]
+        }
+        return String(out)
     }
 
     /** Connects with a config that may not be saved yet; throws with the reason on failure. */
