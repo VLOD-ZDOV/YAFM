@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nexus.filemanager.R
 import android.os.Environment
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -149,10 +151,17 @@ fun HomeScreen(
                             }
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Nexus Files",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.app_name),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = stringResource(R.string.app_subtitle),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 actions = {

@@ -63,7 +63,7 @@ fun RootTerminalScreen(
     var inputCommand by remember { mutableStateOf("") }
     val terminalOutput = remember {
         mutableStateListOf(
-            "Nexus Root Shell [v1.0]",
+            "YAFM Root Shell [v1.0]",
             "Подключено к локальной консоли суперпользователя (su)",
             "------------------------------------------------"
         )

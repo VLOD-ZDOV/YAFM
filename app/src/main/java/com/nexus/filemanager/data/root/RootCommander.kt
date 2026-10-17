@@ -35,6 +35,25 @@ object RootCommander {
         fun stdoutString(): String = stdout.joinToString("\n")
     }
 
+    @Volatile
+    private var detectedSuPath: String? = null
+
+    private fun startSuProcess(): Process {
+        detectedSuPath?.let { path ->
+            try {
+                return ProcessBuilder(path).start()
+            } catch (_: Exception) {}
+        }
+        for (candidate in listOf("su") + SU_PATHS) {
+            try {
+                val p = ProcessBuilder(candidate).start()
+                detectedSuPath = candidate
+                return p
+            } catch (_: Exception) {}
+        }
+        throw IllegalStateException("No su binary accessible")
+    }
+
     suspend fun checkRoot(): RootInfo = withContext(Dispatchers.IO) {
         val suFile = SU_PATHS.firstOrNull { File(it).exists() }
         val suFound = suFile != null
@@ -49,13 +68,15 @@ object RootCommander {
             val vResult = execute("su -v")
             suVersion = if (vResult.isSuccess) vResult.stdout.firstOrNull() ?: "" else ""
 
-            val whichKsu = execute("which ksu")
-            val whichMagisk = execute("magisk -v")
-            if (File("/data/adb/ksu").exists() || whichKsu.isSuccess) {
+            val ksuCheck = execute("ls -d /data/adb/ksu 2>/dev/null || which ksud 2>/dev/null")
+            val apCheck = execute("ls -d /data/adb/ap 2>/dev/null")
+            val magiskCheck = execute("magisk -v 2>/dev/null")
+
+            if (ksuCheck.isSuccess && ksuCheck.stdout.isNotEmpty()) {
                 implementation = "KernelSU"
-            } else if (File("/data/adb/ap").exists()) {
+            } else if (apCheck.isSuccess && apCheck.stdout.isNotEmpty()) {
                 implementation = "APatch"
-            } else if (whichMagisk.isSuccess || suVersion.contains("MAGISK", ignoreCase = true)) {
+            } else if (magiskCheck.isSuccess || suVersion.contains("MAGISK", ignoreCase = true)) {
                 implementation = "Magisk"
             } else if (suVersion.isNotEmpty()) {
                 implementation = "SU ($suVersion)"
@@ -78,7 +99,7 @@ object RootCommander {
         var process: Process? = null
 
         try {
-            process = ProcessBuilder("su").start()
+            process = startSuProcess()
             val os = DataOutputStream(process.outputStream)
             val isReader = BufferedReader(InputStreamReader(process.inputStream))
             val esReader = BufferedReader(InputStreamReader(process.errorStream))
