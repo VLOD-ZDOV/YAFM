@@ -113,7 +113,8 @@ fun AudioPlayerScreen(
                 MediaItem.Builder()
                     .setMediaId(f.absolutePath)
                     .setUri(Uri.fromFile(f))
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(f.nameWithoutExtension).build())
+                    // No title here: it would hide the one from the file's tags. Without tags the
+                    // screen falls back to the file name.
                     .build()
             }
             val start = queue.indexOfFirst { it.absolutePath == file.absolutePath }.coerceAtLeast(0)

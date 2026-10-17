@@ -2,6 +2,7 @@ package com.nexus.filemanager.data.fs
 
 import com.nexus.filemanager.str
 import com.nexus.filemanager.R
+import android.util.Log
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageType
@@ -34,7 +35,13 @@ class QshFileSystem(
         val stderr = StringBuffer()
         Thread {
             // Kept short: only the start explains a failed login.
-            runCatching { p.errorStream.bufferedReader().forEachLine { if (stderr.length < 4096) stderr.appendLine(it) } }
+            runCatching {
+                p.errorStream.bufferedReader().forEachLine {
+                    // qsh's warnings (e.g. why the connection is not shared) go to logcat as well.
+                    Log.w("qsh", it)
+                    if (stderr.length < 4096) stderr.appendLine(it)
+                }
+            }
         }.apply { isDaemon = true }.start()
         try {
             channel = SftpChannel(p.inputStream, p.outputStream)

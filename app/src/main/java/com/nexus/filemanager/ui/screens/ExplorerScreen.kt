@@ -481,7 +481,7 @@ fun ExplorerScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text(str(R.string.update)) },
+                                text = { Text(str(R.string.refresh)) },
                                 onClick = {
                                     viewModel.loadCurrentDirectory()
                                     showMoreMenu = false

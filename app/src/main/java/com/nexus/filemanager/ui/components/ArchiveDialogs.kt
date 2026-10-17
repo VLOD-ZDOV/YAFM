@@ -45,7 +45,9 @@ fun ExtractArchiveDialog(
     onDismiss: () -> Unit,
     onExtract: (destinationPath: String) -> Unit
 ) {
-    val defaultDest = File(currentPath, archiveItem.name.substringBeforeLast('.')).absolutePath
+    // "pack.tar.lz4" -> "pack": a tar inside a compressor loses both suffixes.
+    val baseName = archiveItem.name.replace(Regex("(\\.tar)?\\.[^.]+$", RegexOption.IGNORE_CASE), "").ifEmpty { archiveItem.name }
+    val defaultDest = File(currentPath, baseName).absolutePath
     var destPath by remember { mutableStateOf(defaultDest) }
 
     AlertDialog(

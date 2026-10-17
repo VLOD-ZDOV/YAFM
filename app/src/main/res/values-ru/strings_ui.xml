@@ -306,4 +306,5 @@
     <string name="x_exec">X (Исп)</string>
     <string name="language">Язык</string>
     <string name="choose_app_language">Выбрать язык приложения</string>
+    <string name="refresh">Обновить</string>
 </resources>

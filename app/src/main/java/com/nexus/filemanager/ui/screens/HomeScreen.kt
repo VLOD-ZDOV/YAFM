@@ -201,7 +201,7 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshDashboard() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = str(R.string.update))
+                        Icon(Icons.Default.Refresh, contentDescription = str(R.string.refresh))
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = str(R.string.settings))

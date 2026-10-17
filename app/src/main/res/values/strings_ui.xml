@@ -306,4 +306,5 @@
     <string name="x_exec">X (exec)</string>
     <string name="language">Language</string>
     <string name="choose_app_language">Choose the app language</string>
+    <string name="refresh">Refresh</string>
 </resources>
