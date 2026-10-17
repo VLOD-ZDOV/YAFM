@@ -14,6 +14,8 @@ import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageStats
 import com.nexus.filemanager.data.model.StorageType
 import com.nexus.filemanager.data.root.RootCommander
+import com.nexus.filemanager.data.update.Release
+import com.nexus.filemanager.data.update.Updater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,6 +55,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     val repository = (application as YafmApp).repository
     val serverRepo = repository.servers
+    val settings = (application as YafmApp).settings
+    val updater = Updater(application)
 
     private val internalRoot = Environment.getExternalStorageDirectory().absolutePath
 
@@ -92,10 +96,10 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _showHiddenFiles = MutableStateFlow(false)
+    private val _showHiddenFiles = MutableStateFlow(settings.settings.value.showHidden)
     val showHiddenFiles: StateFlow<Boolean> = _showHiddenFiles.asStateFlow()
 
-    private val _isGridView = MutableStateFlow(false)
+    private val _isGridView = MutableStateFlow(settings.settings.value.gridView)
     val isGridView: StateFlow<Boolean> = _isGridView.asStateFlow()
 
     private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
@@ -231,10 +235,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun toggleHiddenFiles() {
         _showHiddenFiles.value = !_showHiddenFiles.value
+        settings.update { it.copy(showHidden = _showHiddenFiles.value) }
     }
 
     fun toggleGridView() {
         _isGridView.value = !_isGridView.value
+        settings.update { it.copy(gridView = _isGridView.value) }
     }
 
     fun setSortMode(mode: SortMode) {
@@ -434,6 +440,53 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 .onSuccess { onResult(true, it.ifBlank { "Связано" }) }
                 .onFailure { onResult(false, describe(it)) }
         }
+    }
+
+    // Updates from GitHub releases
+
+    sealed interface UpdateState {
+        data object Idle : UpdateState
+        data object Checking : UpdateState
+        data object UpToDate : UpdateState
+        data class Available(val release: Release) : UpdateState
+        data class Downloading(val release: Release, val progress: Float) : UpdateState
+        data class Failed(val message: String) : UpdateState
+    }
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    /** [manual]: from the settings screen, so "no update" and errors are shown too. */
+    fun checkForUpdates(manual: Boolean) {
+        if (!manual && (!settings.settings.value.autoUpdate || !updater.checkDue())) return
+        viewModelScope.launch {
+            _update.value = UpdateState.Checking
+            _update.value = try {
+                updater.newerRelease()?.let { UpdateState.Available(it) }
+                    ?: if (manual) UpdateState.UpToDate else UpdateState.Idle
+            } catch (e: Exception) {
+                if (manual) UpdateState.Failed(describe(e)) else UpdateState.Idle
+            }
+        }
+    }
+
+    fun installUpdate(release: Release) {
+        viewModelScope.launch {
+            try {
+                val apk = updater.download(release) { _update.value = UpdateState.Downloading(release, it) }
+                _update.value = UpdateState.Idle
+                if (!updater.install(apk)) {
+                    _messages.tryEmit("Разрешите установку из YAFM и нажмите «Обновить» ещё раз")
+                    _update.value = UpdateState.Available(release)
+                }
+            } catch (e: Exception) {
+                _update.value = UpdateState.Failed(describe(e))
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        _update.value = UpdateState.Idle
     }
 
     companion object {

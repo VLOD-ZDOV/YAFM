@@ -10,7 +10,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.nexus.filemanager.data.settings.ThemeMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -45,11 +47,16 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun NexusFileManagerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    theme: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val darkTheme = when (theme) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK, ThemeMode.AMOLED -> true
+    }
+    val base = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -57,6 +64,17 @@ fun NexusFileManagerTheme(
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
+    // AMOLED: true black behind everything, so the pixels are off; cards stay just visible.
+    val colorScheme = if (theme == ThemeMode.AMOLED) {
+        base.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceContainer = Color(0xFF0A0A0A),
+            surfaceContainerLow = Color(0xFF050505),
+            surfaceContainerHigh = Color(0xFF121212),
+            surfaceVariant = Color(0xFF161616)
+        )
+    } else base
 
     val view = LocalView.current
     if (!view.isInEditMode) {

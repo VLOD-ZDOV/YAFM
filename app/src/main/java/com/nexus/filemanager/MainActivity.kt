@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,8 @@ import com.nexus.filemanager.ui.screens.ExplorerScreen
 import com.nexus.filemanager.ui.screens.HomeScreen
 import com.nexus.filemanager.ui.screens.ImageViewerScreen
 import com.nexus.filemanager.ui.screens.RootTerminalScreen
+import com.nexus.filemanager.ui.screens.SettingsScreen
+import com.nexus.filemanager.ui.components.UpdateDialog
 import com.nexus.filemanager.ui.screens.StorageAnalyzerScreen
 import com.nexus.filemanager.ui.screens.TextEditorScreen
 import com.nexus.filemanager.ui.theme.NexusFileManagerTheme
@@ -44,6 +47,7 @@ sealed class AppScreen {
     data object AppManager : AppScreen()
     data object StorageAnalyzer : AppScreen()
     data object RootTerminal : AppScreen()
+    data object Settings : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -74,8 +78,10 @@ class MainActivity : ComponentActivity() {
 
         checkAndRequestStoragePermissions()
 
+        val settings = (application as YafmApp).settings
         setContent {
-            NexusFileManagerTheme {
+            val s by settings.settings.collectAsState()
+            NexusFileManagerTheme(theme = s.theme, dynamicColor = s.dynamicColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -118,6 +124,9 @@ class MainActivity : ComponentActivity() {
 fun FileManagerApp(viewModel: FileExplorerViewModel) {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
 
+    LaunchedEffect(Unit) { viewModel.checkForUpdates(manual = false) }
+    UpdateDialog(viewModel)
+
     Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
         when (screen) {
             is AppScreen.Home -> {
@@ -134,6 +143,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     },
                     onNavigateToRootTerminal = {
                         currentScreen = AppScreen.RootTerminal
+                    },
+                    onNavigateToSettings = {
+                        currentScreen = AppScreen.Settings
                     }
                 )
             }
@@ -186,6 +198,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                         currentScreen = AppScreen.Explorer
                     }
                 )
+            }
+            is AppScreen.Settings -> {
+                SettingsScreen(viewModel = viewModel, onNavigateBack = { currentScreen = AppScreen.Home })
             }
             is AppScreen.RootTerminal -> {
                 RootTerminalScreen(

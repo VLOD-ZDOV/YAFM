@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
@@ -103,7 +104,8 @@ fun HomeScreen(
     onNavigateToExplorer: () -> Unit,
     onNavigateToAppManager: () -> Unit,
     onNavigateToStorageAnalyzer: () -> Unit,
-    onNavigateToRootTerminal: () -> Unit
+    onNavigateToRootTerminal: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     val storageStats by viewModel.storageStats.collectAsState()
     val rootInfo by viewModel.rootInfo.collectAsState()
@@ -196,6 +198,9 @@ fun HomeScreen(
                 actions = {
                     IconButton(onClick = { viewModel.refreshDashboard() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
