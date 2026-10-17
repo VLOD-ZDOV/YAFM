@@ -98,6 +98,8 @@ dependencies {
     // Archives (ZIP, TAR, GZ, BZ2, XZ, 7Z)
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.10")
+    implementation("com.github.luben:zstd-jni:1.5.7-12@aar")
+    implementation("org.brotli:dec:0.1.2")
 
     // Network protocols
     implementation("com.hierynomus:smbj:0.13.0")
@@ -108,6 +110,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Desktop natives for zstd in JVM tests (the app uses the Android aar).
+    testImplementation("com.github.luben:zstd-jni:1.5.7-12")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

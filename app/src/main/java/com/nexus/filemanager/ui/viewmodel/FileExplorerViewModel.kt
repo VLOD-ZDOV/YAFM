@@ -398,13 +398,13 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun compressSelected(archiveName: String, onDone: () -> Unit) {
+    fun compressSelected(archiveName: String, format: ArchiveManager.Format, onDone: () -> Unit) {
         viewModelScope.launch {
             _isArchiveProcessing.value = true
             try {
                 val sources = _selectedItems.value.map { repository.materialize(it) }
                 val dest = File(archiveOutputDir(), archiveName)
-                ArchiveManager.createZipArchive(sources, dest) { _archiveProgress.value = it }
+                ArchiveManager.createArchive(sources, dest, format) { _archiveProgress.value = it }
                 clearSelection()
                 onDone()
             } catch (e: Exception) {

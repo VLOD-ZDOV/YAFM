@@ -17,6 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,20 +110,22 @@ fun ExtractArchiveDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CompressDialog(
     selectedCount: Int,
     progress: ArchiveManager.Progress?,
     isCompressing: Boolean,
     onDismiss: () -> Unit,
-    onCompress: (archiveName: String) -> Unit
+    onCompress: (archiveName: String, format: ArchiveManager.Format) -> Unit
 ) {
-    var archiveName by remember { mutableStateOf("Archive.zip") }
+    var baseName by remember { mutableStateOf("Archive") }
+    var format by remember { mutableStateOf(ArchiveManager.Format.ZIP) }
 
     AlertDialog(
         onDismissRequest = { if (!isCompressing) onDismiss() },
         title = {
-            Text(if (isCompressing) "Создание архива..." else "Сжать в ZIP")
+            Text(if (isCompressing) "Создание архива..." else "Создать архив")
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -148,23 +154,27 @@ fun CompressDialog(
                     )
                 } else {
                     OutlinedTextField(
-                        value = archiveName,
-                        onValueChange = { archiveName = it },
+                        value = baseName,
+                        onValueChange = { baseName = it },
                         label = { Text("Имя архива") },
+                        suffix = { Text(format.extension) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ArchiveManager.Format.entries.forEach { f ->
+                            FilterChip(selected = format == f, onClick = { format = f }, label = { Text(f.label) })
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             if (!isCompressing) {
                 Button(
-                    onClick = {
-                        val name = if (archiveName.endsWith(".zip")) archiveName else "$archiveName.zip"
-                        onCompress(name)
-                    },
-                    enabled = archiveName.isNotBlank()
+                    onClick = { onCompress(baseName.trim().removeSuffix(format.extension) + format.extension, format) },
+                    enabled = baseName.isNotBlank() && '/' !in baseName
                 ) {
                     Text("Сжать")
                 }

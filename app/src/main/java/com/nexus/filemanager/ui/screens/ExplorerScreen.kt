@@ -222,8 +222,8 @@ fun ExplorerScreen(
             progress = archiveProgress,
             isCompressing = isArchiveProcessing,
             onDismiss = { showCompressDialog = false },
-            onCompress = { archiveName ->
-                viewModel.compressSelected(archiveName) {
+            onCompress = { archiveName, format ->
+                viewModel.compressSelected(archiveName, format) {
                     showCompressDialog = false
                 }
             }
