@@ -12,6 +12,10 @@ import java.io.OutputStream
 /** Everything through `su`. Paths always go through [shellQuote]. */
 class RootFileSystem : FileSystem {
 
+    private companion object {
+        const val MULTILINE = "__multiline_names__"
+    }
+
     private fun run(command: String): RootCommander.CommandResult {
         val result = RootCommander.executeBlocking(command)
         if (!result.isSuccess) {
@@ -22,42 +26,81 @@ class RootFileSystem : FileSystem {
 
     override fun list(dir: String): List<FileItem> {
         val q = shellQuote(dir)
-        // lstat, so links are seen as links (recursive operations must not follow them).
+        // -H follows only `dir` itself; entries are lstat-ed, so links are seen as links.
+        val find = "find -H $q -mindepth 1 -maxdepth 1"
+        // Output is one line per entry, so a name with a line break could pass for another entry:
+        // such directories take the slower exact path, with names ended by NUL.
         val result = RootCommander.executeBlocking(
-            "find -H $q -mindepth 1 -maxdepth 1 -exec stat -c '%f|%s|%Y|%U|%G|%n' {} + 2>/dev/null"
+            "if $find -name '*\n*' | grep -q .; then echo $MULTILINE; " +
+                "else $find -exec stat -c '%f|%s|%Y|%U|%G|%n' {} + 2>/dev/null; fi"
         )
-        if (!result.isSuccess && result.stdout.isEmpty()) {
-            // An empty directory also lands here on some toybox versions.
-            if (RootCommander.executeBlocking("[ -d $q ]").isSuccess) return emptyList()
-            throw IOException("Не удалось открыть $dir")
-        }
-        val items = result.stdout.mapNotNull { line -> parseStat(line) }
+        val items = when {
+            result.stdout.firstOrNull() == MULTILINE -> listExact(find)
+            !result.isSuccess && result.stdout.isEmpty() -> {
+                // An empty directory also lands here on some toybox versions.
+                if (RootCommander.executeBlocking("[ -d $q ]").isSuccess) return emptyList()
+                throw IOException("Не удалось открыть $dir")
+            }
+            else -> result.stdout.mapNotNull { line ->
+                val parts = line.split('|', limit = 6)
+                if (parts.size < 6) null else parseStat(parts.take(5), parts[5])
+            }
+        }.filter { parentPath(it.path) == parentPath(joinPath(dir, it.name)) }
+
         val links = items.filter { it.isSymlink }
         if (links.isEmpty()) return items
-        // Which links point to directories, so they can be opened like one.
+        // Which links point to directories, so they open like one; answered by index, not by name.
         val dirLinks = RootCommander.executeBlocking(
-            "for p in ${links.joinToString(" ") { shellQuote(it.path) }}; do [ -d \"\$p\" ] && echo \"\$p\"; done"
-        ).stdout.toSet()
+            "i=0; for p in ${links.joinToString(" ") { shellQuote(it.path) }}; do [ -d \"\$p\" ] && echo \$i; i=\$((i+1)); done"
+        ).stdout.mapNotNull { it.trim().toIntOrNull() }.mapNotNull { links.getOrNull(it)?.path }.toSet()
         return items.map { if (it.isSymlink && it.path in dirLinks) it.copy(isDirectory = true, size = 0L) else it }
     }
 
-    private fun parseStat(line: String): FileItem? {
-        val parts = line.split('|', limit = 6)
-        if (parts.size < 6) return null
-        val mode = parts[0].toIntOrNull(16) ?: return null
+    /** Per entry: its `stat` line, then its path ended by NUL, which no name can contain. */
+    private fun listExact(find: String): List<FileItem> {
+        // stat and printf in one child, one after the other: find's own -print0 would be buffered apart from them.
+        val process = RootCommander.openProcess(
+            "$find -exec sh -c 'stat -c \"%f|%s|%Y|%U|%G\" \"\$1\" && printf \"%s\\0\" \"\$1\"' sh {} \\; 2>/dev/null"
+        )
+        process.outputStream.close()
+        val data = process.inputStream.use { it.readBytes() }
+        process.waitFor()
+        process.destroy()
+        val items = mutableListOf<FileItem>()
+        var pos = 0
+        while (pos < data.size) {
+            val nl = data.indexOfFrom('\n'.code.toByte(), pos)
+            val nul = if (nl < 0) -1 else data.indexOfFrom(0, nl + 1)
+            if (nul < 0) break
+            val fields = String(data, pos, nl - pos, Charsets.UTF_8).split('|')
+            parseStat(fields, String(data, nl + 1, nul - nl - 1, Charsets.UTF_8))?.let { items += it }
+            pos = nul + 1
+        }
+        return items
+    }
+
+    private fun ByteArray.indexOfFrom(b: Byte, from: Int): Int {
+        for (i in from until size) if (this[i] == b) return i
+        return -1
+    }
+
+    /** `stat` fields %f, %s, %Y, %U, %G and the entry's full path. */
+    private fun parseStat(fields: List<String>, path: String): FileItem? {
+        if (fields.size < 5) return null
+        val mode = fields[0].toIntOrNull(16) ?: return null
         val isDir = mode and 0xF000 == 0x4000
         val isLink = mode and 0xF000 == 0xA000
-        val name = parts[5].substringAfterLast('/')
+        val name = path.substringAfterLast('/')
         if (name.isEmpty()) return null
         return FileItem(
             name = name,
-            path = parts[5],
-            size = if (isDir) 0L else parts[1].toLongOrNull() ?: 0L,
+            path = path,
+            size = if (isDir) 0L else fields[1].toLongOrNull() ?: 0L,
             isDirectory = isDir,
-            lastModified = (parts[2].toLongOrNull() ?: 0L) * 1000L,
+            lastModified = (fields[2].toLongOrNull() ?: 0L) * 1000L,
             permissions = permissionString(mode and 0x1ff, isDir, isLink),
-            owner = parts[3],
-            group = parts[4],
+            owner = fields[3],
+            group = fields[4],
             storageType = StorageType.ROOT,
             isSymlink = isLink
         )

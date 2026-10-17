@@ -52,15 +52,19 @@ class SftpFileSystem(
 
     fun home(): String = withChannel { it.home }
 
+    // JSch reads `*`, `?` and `\` in most paths as a glob: rm("dir/*") would delete every file.
+    // mkdir is the exception and takes the path as it is.
+    private fun esc(path: String) = path.replace("\\", "\\\\").replace("*", "\\*").replace("?", "\\?")
+
     override fun list(dir: String): List<FileItem> = withChannel { ch ->
-        ch.ls(dir.ifEmpty { "/" })
+        ch.ls(esc(dir.ifEmpty { "/" }))
             .filterIsInstance<ChannelSftp.LsEntry>()
             .filter { it.filename != "." && it.filename != ".." }
             .map { entry ->
                 val path = joinPath(dir, entry.filename)
                 val isLink = entry.attrs.isLink
                 // Show a symlink to a directory as a directory.
-                val attrs = if (isLink) runCatching { ch.stat(path) }.getOrDefault(entry.attrs) else entry.attrs
+                val attrs = if (isLink) runCatching { ch.stat(esc(path)) }.getOrDefault(entry.attrs) else entry.attrs
                 attrs.toItem(entry.filename, path).copy(isSymlink = isLink)
             }
     }
@@ -80,7 +84,7 @@ class SftpFileSystem(
 
     override fun openRead(path: String): InputStream {
         val ch = channel()
-        return object : FilterInputStream(ch.get(path)) {
+        return object : FilterInputStream(ch.get(esc(path))) {
             override fun close() {
                 try { super.close() } finally { ch.disconnect() }
             }
@@ -89,7 +93,7 @@ class SftpFileSystem(
 
     override fun openWrite(path: String): OutputStream {
         val ch = channel()
-        return object : FilterOutputStream(ch.put(path, ChannelSftp.OVERWRITE)) {
+        return object : FilterOutputStream(ch.put(esc(path), ChannelSftp.OVERWRITE)) {
             override fun write(b: ByteArray, off: Int, len: Int) = out.write(b, off, len)
             override fun close() {
                 try { super.close() } finally { ch.disconnect() }
@@ -98,10 +102,10 @@ class SftpFileSystem(
     }
 
     override fun mkdir(path: String) = withChannel { it.mkdir(path) }
-    override fun rename(from: String, to: String) = withChannel { it.rename(from, to) }
-    override fun removeFile(path: String) = withChannel { it.rm(path) }
-    override fun removeDir(path: String) = withChannel { it.rmdir(path) }
-    override fun chmod(path: String, mode: Int) = withChannel { it.chmod(mode, path) }
+    override fun rename(from: String, to: String) = withChannel { it.rename(esc(from), esc(to)) }
+    override fun removeFile(path: String) = withChannel { it.rm(esc(path)) }
+    override fun removeDir(path: String) = withChannel { it.rmdir(esc(path)) }
+    override fun chmod(path: String, mode: Int) = withChannel { it.chmod(mode, esc(path)) }
 
     @Synchronized
     override fun close() {

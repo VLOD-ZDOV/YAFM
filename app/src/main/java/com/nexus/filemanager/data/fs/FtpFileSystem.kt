@@ -40,6 +40,12 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         return ftp
     }
 
+    /** A line break in a path would end the FTP command and start another one chosen by the file's name. */
+    private fun checked(path: String): String {
+        if ('\r' in path || '\n' in path) throw IOException("Имя с переводом строки не поддерживается по FTP")
+        return path
+    }
+
     @Synchronized
     private fun <T> command(block: (FTPClient) -> T): T {
         val ftp = control?.takeIf { it.isConnected && runCatching { it.sendNoOp() }.getOrDefault(false) }
@@ -53,7 +59,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
 
     override fun list(dir: String): List<FileItem> = command { ftp ->
         val path = dir.ifEmpty { "/" }
-        ftp.listFiles(path).filter { it.name != "." && it.name != ".." }.map { it.toItem(path) }
+        ftp.listFiles(checked(path)).filter { it.name != "." && it.name != ".." }.map { it.toItem(path) }
     }
 
     private fun FTPFile.toItem(dir: String): FileItem {
@@ -80,7 +86,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
 
     override fun openRead(path: String): InputStream {
         val ftp = connect()
-        val stream = ftp.retrieveFileStream(path) ?: run {
+        val stream = ftp.retrieveFileStream(checked(path)) ?: run {
             val reply = ftp.replyString
             ftp.disconnect()
             throw IOException(reply?.trim() ?: "Не удалось открыть файл")
@@ -94,7 +100,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
 
     override fun openWrite(path: String): OutputStream {
         val ftp = connect()
-        val stream = ftp.storeFileStream(path) ?: run {
+        val stream = ftp.storeFileStream(checked(path)) ?: run {
             val reply = ftp.replyString
             ftp.disconnect()
             throw IOException(reply?.trim() ?: "Не удалось записать файл")
@@ -112,13 +118,13 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         }
     }
 
-    override fun mkdir(path: String) = command { it.check(it.makeDirectory(path)) }
-    override fun rename(from: String, to: String) = command { it.check(it.rename(from, to)) }
-    override fun removeFile(path: String) = command { it.check(it.deleteFile(path)) }
-    override fun removeDir(path: String) = command { it.check(it.removeDirectory(path)) }
+    override fun mkdir(path: String) = command { it.check(it.makeDirectory(checked(path))) }
+    override fun rename(from: String, to: String) = command { it.check(it.rename(checked(from), checked(to))) }
+    override fun removeFile(path: String) = command { it.check(it.deleteFile(checked(path))) }
+    override fun removeDir(path: String) = command { it.check(it.removeDirectory(checked(path))) }
 
     override fun chmod(path: String, mode: Int) = command {
-        it.check(it.sendSiteCommand("CHMOD ${Integer.toOctalString(mode)} $path"))
+        it.check(it.sendSiteCommand("CHMOD ${Integer.toOctalString(mode)} ${checked(path)}"))
     }
 
     @Synchronized
