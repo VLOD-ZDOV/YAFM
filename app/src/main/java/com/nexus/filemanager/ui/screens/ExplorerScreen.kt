@@ -58,6 +58,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import com.nexus.filemanager.data.settings.VideoPlayer
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
@@ -103,7 +106,8 @@ fun ExplorerScreen(
     viewModel: FileExplorerViewModel,
     onNavigateBack: () -> Unit,
     onOpenFileInEditor: (FileItem) -> Unit,
-    onOpenImage: (FileItem) -> Unit
+    onOpenImage: (FileItem) -> Unit,
+    onOpenVideo: (java.io.File, List<java.io.File>) -> Unit
 ) {
     val context = LocalContext.current
     val currentPath by viewModel.currentPath.collectAsState()
@@ -160,6 +164,38 @@ fun ExplorerScreen(
     var deleteConfirmTargets by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var permissionsTarget by remember { mutableStateOf<FileItem?>(null) }
     var detailsTarget by remember { mutableStateOf<FileItem?>(null) }
+    var videoChoice by remember { mutableStateOf<FileItem?>(null) }
+
+    fun playBuiltIn(item: FileItem) {
+        viewModel.withLocalCopy(item) { file ->
+            // Next/previous: the other videos of the same local folder.
+            val playlist = if (item.storageType == StorageType.LOCAL) {
+                fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }
+            } else listOf(file)
+            onOpenVideo(file, playlist)
+        }
+    }
+
+    fun openVideo(item: FileItem) {
+        when (viewModel.settings.settings.value.videoPlayer) {
+            VideoPlayer.BUILT_IN -> playBuiltIn(item)
+            VideoPlayer.SYSTEM -> viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) }
+            VideoPlayer.ASK -> videoChoice = item
+        }
+    }
+
+    videoChoice?.let { item ->
+        VideoChoiceDialog(
+            onDismiss = { videoChoice = null },
+            onChoose = { builtIn, remember ->
+                videoChoice = null
+                if (remember) {
+                    viewModel.settings.update { it.copy(videoPlayer = if (builtIn) VideoPlayer.BUILT_IN else VideoPlayer.SYSTEM) }
+                }
+                if (builtIn) playBuiltIn(item) else viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) }
+            }
+        )
+    }
 
     val isSelectionMode = selectedItems.isNotEmpty()
 
@@ -649,7 +685,7 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+                                            if (item.category == FileCategory.VIDEO) openVideo(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {
@@ -678,7 +714,7 @@ fun ExplorerScreen(
                                         } else if (ArchiveManager.isArchive(item.name)) {
                                             extractTarget = item
                                         } else {
-                                            handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+                                            if (item.category == FileCategory.VIDEO) openVideo(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
                                         }
                                     },
                                     onLongClick = {
@@ -725,4 +761,28 @@ private fun openExternalIntent(context: Context, item: FileItem, file: File) {
     } catch (e: Exception) {
         Toast.makeText(context, "Не удалось открыть файл: ${e.message}", Toast.LENGTH_SHORT).show()
     }
+}
+
+@Composable
+private fun VideoChoiceDialog(onDismiss: () -> Unit, onChoose: (builtIn: Boolean, remember: Boolean) -> Unit) {
+    var remember by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Открыть видео") },
+        text = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { remember = !remember }
+            ) {
+                Checkbox(checked = remember, onCheckedChange = { remember = it })
+                Text("Запомнить выбор (можно поменять в настройках)")
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onChoose(true, remember) }) { Text("Встроенный плеер") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onChoose(false, remember) }) { Text("Другое приложение") }
+        }
+    )
 }

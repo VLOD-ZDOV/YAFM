@@ -96,6 +96,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")
 
+    // Video player. 3.7.3+ need compileSdk 37 and a newer Gradle plugin.
+    implementation("org.videolan.android:libvlc-all:3.7.2")
+
     // Archives (ZIP, TAR, GZ, BZ2, XZ, 7Z)
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.10")
