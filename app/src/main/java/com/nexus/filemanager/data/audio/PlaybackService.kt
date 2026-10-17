@@ -19,7 +19,18 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        session = MediaSession.Builder(this, player).build()
+        session = MediaSession.Builder(this, player)
+            .setCallback(object : MediaSession.Callback {
+                // The service is exported for the system's media controls; other apps get no access,
+                // since a controller could queue any file this app can read and see what is playing.
+                override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
+                    if (controller.isTrusted || controller.packageName == packageName) {
+                        super.onConnect(session, controller)
+                    } else {
+                        MediaSession.ConnectionResult.reject()
+                    }
+            })
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
