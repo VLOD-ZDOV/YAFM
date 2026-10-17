@@ -24,8 +24,23 @@ android {
         }
     }
 
+    // Release signing comes from ~/.gradle/gradle.properties (YAFM_STORE_FILE, YAFM_STORE_PASSWORD,
+    // YAFM_KEY_ALIAS); without them the release build is left unsigned.
+    val releaseStore = providers.gradleProperty("YAFM_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = providers.gradleProperty("YAFM_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("YAFM_KEY_ALIAS").get()
+                keyPassword = storePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
