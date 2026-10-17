@@ -38,6 +38,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,9 +88,13 @@ fun StorageAnalyzerScreen(
 ) {
     val scope = rememberCoroutineScope()
     var isAnalyzing by remember { mutableStateOf(true) }
-    var largestFiles by remember { mutableStateOf<List<FileItem>>(emptyList()) }
+    var allFiles by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var categoryStats by remember { mutableStateOf<List<CategoryStat>>(emptyList()) }
     var totalScannedBytes by remember { mutableStateOf(0L) }
+    var filter by remember { mutableStateOf<FileCategory?>(null) }
+    val largestFiles = remember(allFiles, filter) {
+        allFiles.asSequence().filter { filter == null || statCategory(it.category) == filter }.take(50).toList()
+    }
 
     BackHandler {
         onNavigateBack()
@@ -95,54 +102,48 @@ fun StorageAnalyzerScreen(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val root = Environment.getExternalStorageDirectory()
-            val filesList = mutableListOf<File>()
+            val files = mutableListOf<FileItem>()
             val catBytes = mutableMapOf<FileCategory, Long>()
             val catCounts = mutableMapOf<FileCategory, Int>()
-
-            try {
-                root.walkTopDown()
-                    .maxDepth(6)
+            runCatching {
+                Environment.getExternalStorageDirectory().walkTopDown()
+                    // Links are not followed: a link to a parent would never end.
+                    .onEnter { !java.nio.file.Files.isSymbolicLink(it.toPath()) }
                     .filter { it.isFile && !it.name.startsWith(".") }
                     .forEach { file ->
                         val len = file.length()
                         if (len > 0) {
-                            filesList.add(file)
-                            val item = FileItem(name = file.name, path = file.absolutePath, size = len)
-                            val cat = item.category
+                            val item = FileItem(
+                                name = file.name,
+                                path = file.absolutePath,
+                                size = len,
+                                lastModified = file.lastModified(),
+                                storageType = StorageType.LOCAL
+                            )
+                            files += item
+                            val cat = statCategory(item.category)
                             catBytes[cat] = (catBytes[cat] ?: 0L) + len
                             catCounts[cat] = (catCounts[cat] ?: 0) + 1
                         }
                     }
-            } catch (_: Exception) {}
-
-            filesList.sortByDescending { it.length() }
-            val top50 = filesList.take(50).map {
-                FileItem(
-                    name = it.name,
-                    path = it.absolutePath,
-                    size = it.length(),
-                    isDirectory = false,
-                    lastModified = it.lastModified(),
-                    storageType = StorageType.LOCAL
-                )
             }
+            files.sortByDescending { it.size }
 
-            val total = catBytes.values.sum()
+            fun stat(c: FileCategory, title: String, color: Color) = CategoryStat(c, title, color, catBytes[c] ?: 0L, catCounts[c] ?: 0)
             val stats = listOf(
-                CategoryStat(FileCategory.VIDEO, "Видео", VideoColor, catBytes[FileCategory.VIDEO] ?: 0L, catCounts[FileCategory.VIDEO] ?: 0),
-                CategoryStat(FileCategory.IMAGE, "Изображения", ImageColor, catBytes[FileCategory.IMAGE] ?: 0L, catCounts[FileCategory.IMAGE] ?: 0),
-                CategoryStat(FileCategory.AUDIO, "Аудио", AudioColor, catBytes[FileCategory.AUDIO] ?: 0L, catCounts[FileCategory.AUDIO] ?: 0),
-                CategoryStat(FileCategory.APK, "Установочные APK", ApkColor, catBytes[FileCategory.APK] ?: 0L, catCounts[FileCategory.APK] ?: 0),
-                CategoryStat(FileCategory.ARCHIVE, "Архивы", ArchiveColor, catBytes[FileCategory.ARCHIVE] ?: 0L, catCounts[FileCategory.ARCHIVE] ?: 0),
-                CategoryStat(FileCategory.DOCUMENT, "Документы", DocumentColor, catBytes[FileCategory.DOCUMENT] ?: 0L, catCounts[FileCategory.DOCUMENT] ?: 0),
-                CategoryStat(FileCategory.OTHER, "Другое", TextColor, catBytes[FileCategory.OTHER] ?: 0L, catCounts[FileCategory.OTHER] ?: 0)
+                stat(FileCategory.VIDEO, "Видео", VideoColor),
+                stat(FileCategory.IMAGE, "Изображения", ImageColor),
+                stat(FileCategory.AUDIO, "Аудио", AudioColor),
+                stat(FileCategory.APK, "Установочные APK", ApkColor),
+                stat(FileCategory.ARCHIVE, "Архивы", ArchiveColor),
+                stat(FileCategory.DOCUMENT, "Документы", DocumentColor),
+                stat(FileCategory.OTHER, "Другое", TextColor)
             ).filter { it.totalBytes > 0 }.sortedByDescending { it.totalBytes }
 
             withContext(Dispatchers.Main) {
-                largestFiles = top50
+                allFiles = files
                 categoryStats = stats
-                totalScannedBytes = total
+                totalScannedBytes = catBytes.values.sum()
                 isAnalyzing = false
             }
         }
@@ -203,7 +204,11 @@ fun StorageAnalyzerScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
                             categoryStats.forEach { stat ->
                                 val pct = if (totalScannedBytes > 0) stat.totalBytes.toFloat() / totalScannedBytes else 0f
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Column(
+                                    modifier = Modifier
+                                        .clickable { filter = if (filter == stat.category) null else stat.category }
+                                        .padding(vertical = 4.dp)
+                                ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
@@ -237,6 +242,20 @@ fun StorageAnalyzerScreen(
                         text = "Самые большие файлы (Топ 50)",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Все") })
+                        categoryStats.forEach { stat ->
+                            FilterChip(
+                                selected = filter == stat.category,
+                                onClick = { filter = stat.category },
+                                label = { Text("${stat.title} (${stat.count})") }
+                            )
+                        }
+                    }
                 }
 
                 items(largestFiles, key = { it.path }) { item ->
@@ -288,4 +307,10 @@ fun StorageAnalyzerScreen(
             }
         }
     }
+}
+
+/** Groups for the analysis: code and plain text count as "other". */
+private fun statCategory(c: FileCategory) = when (c) {
+    FileCategory.CODE, FileCategory.TEXT, FileCategory.FOLDER -> FileCategory.OTHER
+    else -> c
 }
