@@ -139,13 +139,6 @@ object RootCommander {
         } catch (_: Exception) {}
     }
 
-    suspend fun remountPartition(partition: String = "/", readWrite: Boolean = true): Boolean = withContext(Dispatchers.IO) {
-        val mode = if (readWrite) "rw" else "ro"
-        val cmd = "mount -o remount,$mode ${shellQuote(partition)} || mount -o remount,$mode /system"
-        val result = execute(cmd)
-        result.isSuccess
-    }
-
     suspend fun changePermissions(path: String, octal: String): Boolean = withContext(Dispatchers.IO) {
         if (!octal.matches(Regex("[0-7]{3,4}"))) return@withContext false
         val result = execute("chmod $octal ${shellQuote(path)}")

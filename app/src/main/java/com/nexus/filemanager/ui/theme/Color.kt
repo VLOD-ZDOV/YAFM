@@ -33,7 +33,7 @@ val ArchiveColor = Color(0xFFF97316) // Orange
 val ApkColor = Color(0xFF22C55E)     // Android green
 val CodeColor = Color(0xFF06B6D4)    // Cyan
 val TextColor = Color(0xFF64748B)    // Slate
-val RootColor = Color(0xFFEF4444)    // Red shield
+val RootColor = Color(0xFF10B981)
 
 // Status Colors
 val SuccessGreen = Color(0xFF10B981)

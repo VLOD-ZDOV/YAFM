@@ -58,6 +58,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -109,6 +112,26 @@ fun ExplorerScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isGridView by viewModel.isGridView.collectAsState()
+    val location by viewModel.location.collectAsState()
+
+    // The screen is rebuilt after a file is viewed: scroll positions live in the ViewModel, per folder.
+    val listState = remember(location) {
+        val (index, offset) = viewModel.scrollPosition(location)
+        LazyListState(index, offset)
+    }
+    val gridState = remember(location) {
+        val (index, offset) = viewModel.scrollPosition(location)
+        LazyGridState(index, offset)
+    }
+    DisposableEffect(location, isGridView) {
+        onDispose {
+            if (isGridView) {
+                viewModel.saveScrollPosition(location, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            } else {
+                viewModel.saveScrollPosition(location, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
+        }
+    }
     val showHidden by viewModel.showHiddenFiles.collectAsState()
     val selectedItems by viewModel.selectedItems.collectAsState()
     val clipboardItems by viewModel.clipboardItems.collectAsState()
@@ -415,16 +438,6 @@ fun ExplorerScreen(
                                     showMoreMenu = false
                                 }
                             )
-                            if (storageType == StorageType.ROOT) {
-                                DropdownMenuItem(
-                                    text = { Text("Remount RW (/system)") },
-                                    onClick = {
-                                        viewModel.remountPartition("/system", true)
-                                        Toast.makeText(context, "Remount RW выполнен", Toast.LENGTH_SHORT).show()
-                                        showMoreMenu = false
-                                    }
-                                )
-                            }
                         }
                     }
                 },
@@ -613,6 +626,7 @@ fun ExplorerScreen(
                 } else {
                     if (isGridView) {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(110.dp),
                             contentPadding = PaddingValues(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -644,6 +658,7 @@ fun ExplorerScreen(
                         }
                     } else {
                         LazyColumn(
+                            state = listState,
                             contentPadding = PaddingValues(vertical = 4.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {

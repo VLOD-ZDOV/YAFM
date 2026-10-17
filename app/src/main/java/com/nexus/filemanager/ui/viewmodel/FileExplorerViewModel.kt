@@ -116,6 +116,13 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     val clipboardOp: StateFlow<ClipboardOp> = _clipboardOp.asStateFlow()
 
     private val history = ArrayDeque<Location>()
+    private val scrollPositions = mutableMapOf<Location, Pair<Int, Int>>()
+
+    fun scrollPosition(location: Location): Pair<Int, Int> = scrollPositions[location] ?: (0 to 0)
+
+    fun saveScrollPosition(location: Location, index: Int, offset: Int) {
+        scrollPositions[location] = index to offset
+    }
     private var loadJob: Job? = null
 
     init {
@@ -162,17 +169,25 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     /** Another directory in the current storage. */
     fun navigateTo(path: String) = go(_location.value.copy(path = path))
 
-    fun navigateToRoot(path: String = "/") = go(Location(StorageType.ROOT, path))
+    /** Entering the explorer from outside: history starts over, so Back from here returns to where it came from. */
+    private fun enter(target: Location) {
+        history.clear()
+        _location.value = target
+        _searchQuery.value = ""
+        loadCurrentDirectory()
+    }
 
-    fun navigateToInternalStorage() = go(Location(StorageType.LOCAL, internalRoot))
+    fun navigateToRoot(path: String = "/") = enter(Location(StorageType.ROOT, path))
 
-    fun navigateToLocal(path: String) = go(Location(StorageType.LOCAL, path))
+    fun navigateToInternalStorage() = enter(Location(StorageType.LOCAL, internalRoot))
+
+    fun navigateToLocal(path: String) = enter(Location(StorageType.LOCAL, path))
 
     fun navigateToServer(server: ServerConfig) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                go(Location(server.type, repository.startPath(server), server))
+                enter(Location(server.type, repository.startPath(server), server))
             } catch (e: Exception) {
                 _isLoading.value = false
                 _messages.tryEmit("${server.name}: ${describe(e)}")
@@ -331,13 +346,6 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun changePermissions(item: FileItem, octal: String) = operation("Права изменены") {
         repository.changePermissions(item, octal)
-    }
-
-    fun remountPartition(partition: String, rw: Boolean) {
-        viewModelScope.launch {
-            val ok = RootCommander.remountPartition(partition, rw)
-            _messages.tryEmit(if (ok) "$partition перемонтирован (${if (rw) "RW" else "RO"})" else "Не удалось перемонтировать $partition")
-        }
     }
 
     /** Opens a file in a viewer or another app: remote files are fetched to the cache first. */

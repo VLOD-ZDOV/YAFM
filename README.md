@@ -158,9 +158,3 @@ scripts/fetch-qsh.sh <URL или путь к qsh-aarch64-android.tar.gz>
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-
----
-
-## 📄 Лицензия
-
-GPL-3.0, текст в [LICENSE](LICENSE).

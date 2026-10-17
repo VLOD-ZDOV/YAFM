@@ -218,9 +218,6 @@ fun HomeScreen(
                     onNavigateRoot = {
                         viewModel.navigateToRoot()
                         onNavigateToExplorer()
-                    },
-                    onRemountRW = {
-                        viewModel.remountPartition("/", true)
                     }
                 )
             }
@@ -523,8 +520,7 @@ fun HomeScreen(
 @Composable
 fun RootStatusCard(
     rootInfo: com.nexus.filemanager.data.model.RootInfo,
-    onNavigateRoot: () -> Unit,
-    onRemountRW: () -> Unit
+    onNavigateRoot: () -> Unit
 ) {
     val isGranted = rootInfo.isRootGranted
     val tint = if (isGranted) RootColor else MaterialTheme.colorScheme.onSurfaceVariant
@@ -568,26 +564,12 @@ fun RootStatusCard(
 
             if (isGranted) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FilledTonalButton(
+                    onClick = onNavigateRoot,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Button(
-                        onClick = onNavigateRoot,
-                        colors = ButtonDefaults.buttonColors(containerColor = RootColor),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Root проводник (/)")
-                    }
-
-                    FilledTonalButton(
-                        onClick = onRemountRW,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Remount R/W")
-                    }
+                    Text("Root проводник (/)")
                 }
             }
         }
