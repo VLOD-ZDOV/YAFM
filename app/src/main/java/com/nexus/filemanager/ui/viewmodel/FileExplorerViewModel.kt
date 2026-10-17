@@ -138,9 +138,13 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _codeRequest.value = null
     }
 
-    /** True when [e] was a code request, which is then shown instead of an error. */
-    private fun askForCode(e: Throwable, server: ServerConfig?, retry: () -> Unit): Boolean {
-        if (e !is Qsh.CodeRequired || server == null) return false
+    /**
+     * True when [e] was a code request, which is then shown instead of an error. The code goes to the
+     * server that asked, which need not be the one open (a paste from another server).
+     */
+    private fun askForCode(e: Throwable, retry: () -> Unit): Boolean {
+        if (e !is Qsh.CodeRequired) return false
+        val server = serverRepo.getServer(e.serverId) ?: return false
         _codeRequest.value = CodeRequest(server, e.prompt, retry)
         return true
     }
@@ -178,7 +182,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             try {
                 rawFiles.value = repository.list(_location.value)
             } catch (e: Exception) {
-                if (!askForCode(e, _location.value.server) { loadCurrentDirectory() }) {
+                if (!askForCode(e) { loadCurrentDirectory() }) {
                     _errorMessage.value = describe(e)
                 }
                 rawFiles.value = emptyList()
@@ -224,7 +228,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 enter(Location(server.type, repository.startPath(server), server))
             } catch (e: Exception) {
                 _isLoading.value = false
-                if (!askForCode(e, server) { navigateToServer(server) }) {
+                if (!askForCode(e) { navigateToServer(server) }) {
                     _messages.tryEmit("${server.name}: ${describe(e)}")
                 }
             }
@@ -362,7 +366,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 block()
                 success?.let { _messages.tryEmit(it) }
             } catch (e: Exception) {
-                if (!askForCode(e, _location.value.server) { operation(success, block) }) {
+                if (!askForCode(e) { operation(success, block) }) {
                     _messages.tryEmit(describe(e))
                 }
             } finally {

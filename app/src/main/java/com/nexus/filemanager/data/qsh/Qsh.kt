@@ -85,14 +85,15 @@ class Qsh(context: Context) {
     )
 
     /** The server wants an answer (a one-time code) that BatchMode does not let qsh ask for. */
-    class CodeRequired(val prompt: String) : IOException("Сервер просит код: $prompt") {
+    class CodeRequired(val serverId: String, val prompt: String) : IOException("Сервер просит код: $prompt") {
         companion object {
             const val MARKER = "prompting is disabled"
 
-            fun from(stderr: String): CodeRequired? {
+            /** [serverId]: the server that asked, so the code can only go back to it. */
+            fun from(serverId: String, stderr: String): CodeRequired? {
                 if (MARKER !in stderr) return null
                 val prompt = Regex("asks \"([^\"]*)\"").find(stderr)?.groupValues?.get(1)?.trim()
-                return CodeRequired(prompt?.ifEmpty { null } ?: "Одноразовый код")
+                return CodeRequired(serverId, prompt?.ifEmpty { null } ?: "Одноразовый код")
             }
         }
     }

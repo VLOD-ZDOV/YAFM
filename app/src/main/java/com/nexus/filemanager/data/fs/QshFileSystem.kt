@@ -40,7 +40,7 @@ class QshFileSystem(
             p.waitFor()
             p.destroy()
             val err = stderr.toString().trim()
-            Qsh.CodeRequired.from(err)?.let { throw it }
+            Qsh.CodeRequired.from(config.id, err)?.let { throw it }
             throw IOException(err.ifEmpty { e.message ?: "qsh: не удалось подключиться" })
         }
         process = p
