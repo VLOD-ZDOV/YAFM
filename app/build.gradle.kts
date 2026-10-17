@@ -58,6 +58,10 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        // jniLibs: the fetched qsh binary (not in git); jniScripts: the askpass script qsh runs (in git).
+        getByName("main").jniLibs.srcDirs("src/main/jniLibs", "src/main/jniScripts")
+    }
     packaging {
         // qsh runs as a program from the native library dir, so libqsh.so must be extracted there.
         jniLibs {

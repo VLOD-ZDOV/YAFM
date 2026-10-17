@@ -36,6 +36,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.nexus.filemanager.data.settings.ThemeMode
 import com.nexus.filemanager.data.settings.VideoPlayer
 import com.nexus.filemanager.ui.viewmodel.FileExplorerViewModel
@@ -94,6 +106,36 @@ fun SettingsScreen(
                 VideoPlayer.SYSTEM to "В другом приложении"
             ).forEach { (choice, label) ->
                 Choice(label, settings.videoPlayer == choice) { viewModel.settings.update { it.copy(videoPlayer = choice) } }
+            }
+
+            Section("Ключ qsh этого телефона")
+            Text(
+                "Вход на серверы qsh идёт по этому ключу. Его можно связать с сервером через «qshd pair» в окне сервера или добавить вручную в ~/.config/qsh/authorized_keys на сервере.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            var publicKey by remember { mutableStateOf<String?>(null) }
+            val scope = rememberCoroutineScope()
+            val clipboard = LocalClipboardManager.current
+            val context = LocalContext.current
+            publicKey?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val key = runCatching { withContext(Dispatchers.IO) { viewModel.repository.qsh.publicKey() } }
+                                .getOrElse { e -> "Ошибка: ${e.message}" }
+                            publicKey = key
+                            if (!key.startsWith("Ошибка")) {
+                                clipboard.setText(AnnotatedString(key))
+                                Toast.makeText(context, "Ключ скопирован", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = viewModel.repository.qsh.isAvailable
+                ) { Text(if (publicKey == null) "Показать и скопировать" else "Скопировать") }
             }
 
             Section("Обновления")

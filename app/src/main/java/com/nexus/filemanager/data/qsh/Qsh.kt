@@ -2,6 +2,7 @@ package com.nexus.filemanager.data.qsh
 
 import android.content.Context
 import com.nexus.filemanager.data.model.ServerConfig
+import android.system.Os
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -13,8 +14,33 @@ import java.util.concurrent.TimeUnit
 class Qsh(context: Context) {
 
     private val binary = File(context.applicationInfo.nativeLibraryDir, "libqsh.so")
+    private val askpass = File(context.applicationInfo.nativeLibraryDir, "libaskpass.so")
     private val home = File(context.filesDir, "qsh").apply { mkdirs() }
+    private val configDir = File(home, ".config/qsh")
     private val tmp = context.cacheDir
+
+    // Short: a Unix socket path may be at most 107 bytes.
+    private val controlDir = File(home, "c")
+
+    init {
+        // The sftp session is the master connection (ControlMaster=auto); `qsh cp` finds its socket through
+        // this config and reuses the login, so a one-time code is asked once per session, not per copy.
+        configDir.mkdirs()
+        controlDir.mkdirs()
+        listOf(home, File(home, ".config"), configDir, controlDir).forEach { runCatching { Os.chmod(it.path, "700".toInt(8)) } }
+        val config = File(configDir, "config")
+        val text = "Host *\n  ControlPath ${controlDir.absolutePath}/%C\n"
+        if (!config.exists() || config.readText() != text) config.writeText(text)
+        // qsh refuses config files others could write.
+        runCatching { Os.chmod(config.path, "600".toInt(8)) }
+    }
+
+    /** This phone's public key, for authorized_keys on a server (made on first use). */
+    fun publicKey(): String {
+        val pub = File(configDir, "id_ed25519.pub")
+        if (!pub.exists()) run(listOf("keygen"))
+        return pub.readText().trim()
+    }
 
     val isAvailable: Boolean get() = binary.canExecute()
 
@@ -31,21 +57,45 @@ class Qsh(context: Context) {
         val HOST = Regex("[A-Za-z0-9._:%][A-Za-z0-9._:%-]{0,252}")
     }
 
-    private fun start(args: List<String>): Process {
+    /** [answer]: given to qsh through SSH_ASKPASS when the server asks something (a one-time code). */
+    private fun start(args: List<String>, answer: String? = null): Process {
         if (!isAvailable) throw IOException("qsh не встроен в эту сборку (нет libqsh.so)")
         return ProcessBuilder(listOf(binary.absolutePath) + args)
             .apply {
                 environment()["HOME"] = home.absolutePath
                 environment()["TMPDIR"] = tmp.absolutePath
+                if (answer != null) {
+                    environment()["SSH_ASKPASS"] = askpass.absolutePath
+                    environment()["SSH_ASKPASS_REQUIRE"] = "force"
+                    environment()["YAFM_ASKPASS_ANSWER"] = answer
+                }
             }
             .start()
     }
 
-    /** A running `qsh -s sftp`: its stdin/stdout carry the SFTP protocol. */
-    fun startSftp(c: ServerConfig): Process = start(
-        listOf("-q", "-p", c.port.toString(), "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
-            "-s", destination(c), "sftp")
+    /**
+     * A running `qsh -s sftp`: its stdin/stdout carry the SFTP protocol. Without [code] qsh never asks
+     * anything (BatchMode); a server that wants a one-time code then fails with [CodeRequired.MARKER].
+     */
+    fun startSftp(c: ServerConfig, code: String? = null): Process = start(
+        listOf("-q", "-p", c.port.toString(), "-o", "BatchMode=${if (code == null) "yes" else "no"}",
+            "-o", "StrictHostKeyChecking=accept-new", "-o", "ControlMaster=auto",
+            "-s", destination(c), "sftp"),
+        code
     )
+
+    /** The server wants an answer (a one-time code) that BatchMode does not let qsh ask for. */
+    class CodeRequired(val prompt: String) : IOException("Сервер просит код: $prompt") {
+        companion object {
+            const val MARKER = "prompting is disabled"
+
+            fun from(stderr: String): CodeRequired? {
+                if (MARKER !in stderr) return null
+                val prompt = Regex("asks \"([^\"]*)\"").find(stderr)?.groupValues?.get(1)?.trim()
+                return CodeRequired(prompt?.ifEmpty { null } ?: "Одноразовый код")
+            }
+        }
+    }
 
     /** `qsh pair`: registers this app's key on the server with a code from `qshd pair` and pins the host key. */
     fun pair(c: ServerConfig, code: String): String = run(listOf("pair", "-p", c.port.toString(), destination(c), code.trim()))

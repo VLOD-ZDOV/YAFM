@@ -243,6 +243,11 @@ class FileRepository(context: Context) {
         Unit
     }
 
+    /** A one-time code for the next login to this qsh server (see [Qsh.CodeRequired]). */
+    fun provideQshCode(server: ServerConfig, code: String) {
+        (fs(server.type, server.id) as? QshFileSystem)?.pendingCode = code.trim()
+    }
+
     suspend fun pairQsh(config: ServerConfig, code: String): String = io {
         invalidate(config.id)
         qsh.pair(config, code)

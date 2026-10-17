@@ -14,6 +14,7 @@ import com.nexus.filemanager.data.model.RootInfo
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageStats
 import com.nexus.filemanager.data.model.StorageType
+import com.nexus.filemanager.data.qsh.Qsh
 import com.nexus.filemanager.data.root.RootCommander
 import com.nexus.filemanager.data.update.Release
 import com.nexus.filemanager.data.update.Updater
@@ -120,6 +121,30 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _clipboardOp = MutableStateFlow(ClipboardOp.NONE)
     val clipboardOp: StateFlow<ClipboardOp> = _clipboardOp.asStateFlow()
 
+    /** A qsh server asks for a one-time code; [retry] runs again once it is given. */
+    data class CodeRequest(val server: ServerConfig, val prompt: String, val retry: () -> Unit)
+
+    private val _codeRequest = MutableStateFlow<CodeRequest?>(null)
+    val codeRequest: StateFlow<CodeRequest?> = _codeRequest.asStateFlow()
+
+    fun submitCode(code: String) {
+        val request = _codeRequest.value ?: return
+        _codeRequest.value = null
+        repository.provideQshCode(request.server, code)
+        request.retry()
+    }
+
+    fun cancelCode() {
+        _codeRequest.value = null
+    }
+
+    /** True when [e] was a code request, which is then shown instead of an error. */
+    private fun askForCode(e: Throwable, server: ServerConfig?, retry: () -> Unit): Boolean {
+        if (e !is Qsh.CodeRequired || server == null) return false
+        _codeRequest.value = CodeRequest(server, e.prompt, retry)
+        return true
+    }
+
     private val history = ArrayDeque<Location>()
     private val scrollPositions = mutableMapOf<Location, Pair<Int, Int>>()
 
@@ -153,7 +178,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             try {
                 rawFiles.value = repository.list(_location.value)
             } catch (e: Exception) {
-                _errorMessage.value = describe(e)
+                if (!askForCode(e, _location.value.server) { loadCurrentDirectory() }) {
+                    _errorMessage.value = describe(e)
+                }
                 rawFiles.value = emptyList()
             } finally {
                 _isLoading.value = false
@@ -197,7 +224,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 enter(Location(server.type, repository.startPath(server), server))
             } catch (e: Exception) {
                 _isLoading.value = false
-                _messages.tryEmit("${server.name}: ${describe(e)}")
+                if (!askForCode(e, server) { navigateToServer(server) }) {
+                    _messages.tryEmit("${server.name}: ${describe(e)}")
+                }
             }
         }
     }
@@ -333,7 +362,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 block()
                 success?.let { _messages.tryEmit(it) }
             } catch (e: Exception) {
-                _messages.tryEmit(describe(e))
+                if (!askForCode(e, _location.value.server) { operation(success, block) }) {
+                    _messages.tryEmit(describe(e))
+                }
             } finally {
                 _progress.value = null
                 loadCurrentDirectory()

@@ -1,0 +1,3 @@
+#!/system/bin/sh
+# SSH_ASKPASS for qsh: answers its question with the code typed in the app.
+printf '%s\n' "$YAFM_ASKPASS_ANSWER"

@@ -18,11 +18,17 @@ class QshFileSystem(
     private var process: Process? = null
     private var channel: SftpChannel? = null
 
+    /** A one-time code for the next login, used once. */
+    @Volatile
+    var pendingCode: String? = null
+
     @Synchronized
     private fun sftp(): SftpChannel {
         channel?.takeIf { process?.isAlive == true }?.let { return it }
         closeConnection()
-        val p = qsh.startSftp(config)
+        val code = pendingCode
+        pendingCode = null
+        val p = qsh.startSftp(config, code)
         val stderr = StringBuffer()
         Thread {
             // Kept short: only the start explains a failed login.
@@ -33,7 +39,9 @@ class QshFileSystem(
         } catch (e: IOException) {
             p.waitFor()
             p.destroy()
-            throw IOException(stderr.toString().trim().ifEmpty { e.message ?: "qsh: не удалось подключиться" })
+            val err = stderr.toString().trim()
+            Qsh.CodeRequired.from(err)?.let { throw it }
+            throw IOException(err.ifEmpty { e.message ?: "qsh: не удалось подключиться" })
         }
         process = p
         return channel!!
@@ -72,11 +80,16 @@ class QshFileSystem(
     override fun removeDir(path: String) = sftp().rmdir(path)
     override fun chmod(path: String, mode: Int) = sftp().chmod(path, mode)
 
-    fun upload(localPath: String, isDirectory: Boolean, remoteDir: String) =
+    // The sftp session is up first, so `qsh cp` rides on its connection instead of logging in again.
+    fun upload(localPath: String, isDirectory: Boolean, remoteDir: String) {
+        sftp()
         qsh.upload(config, localPath, remoteDir, isDirectory)
+    }
 
-    fun download(remote: FileItem, localDir: String) =
+    fun download(remote: FileItem, localDir: String) {
+        sftp()
         qsh.download(config, remote.path, localDir, remote.isDirectory)
+    }
 
     private fun closeConnection() {
         channel?.close()

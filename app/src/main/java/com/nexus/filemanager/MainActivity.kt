@@ -36,6 +36,7 @@ import com.nexus.filemanager.ui.screens.SettingsScreen
 import com.nexus.filemanager.ui.screens.VideoPlayerScreen
 import com.nexus.filemanager.ui.screens.AudioPlayerScreen
 import com.nexus.filemanager.ui.components.UpdateDialog
+import com.nexus.filemanager.ui.components.CodeDialog
 import com.nexus.filemanager.ui.screens.StorageAnalyzerScreen
 import com.nexus.filemanager.ui.screens.TextEditorScreen
 import com.nexus.filemanager.ui.theme.NexusFileManagerTheme
@@ -130,6 +131,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
 
     LaunchedEffect(Unit) { viewModel.checkForUpdates(manual = false) }
     UpdateDialog(viewModel)
+    CodeDialog(viewModel)
 
     Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
         when (screen) {
