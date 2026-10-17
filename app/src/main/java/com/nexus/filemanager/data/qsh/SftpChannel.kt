@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.qsh
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
@@ -49,7 +51,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         val len = inp.readInt()
         val type = inp.readUnsignedByte()
         inp.skipBytes(len - 1)
-        if (type != FXP_VERSION) throw IOException("Сервер ответил не по протоколу SFTP")
+        if (type != FXP_VERSION) throw IOException(str(R.string.the_server_does_not_speak_sftp))
         Thread(::readLoop, "sftp-reader").apply { isDaemon = true }.start()
     }
 
@@ -57,7 +59,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         try {
             while (true) {
                 val len = inp.readInt()
-                if (len < 5 || len > MAX_PACKET) throw IOException("Неверный пакет SFTP")
+                if (len < 5 || len > MAX_PACKET) throw IOException(str(R.string.invalid_sftp_packet))
                 val body = ByteArray(len)
                 inp.readFully(body)
                 val buf = ByteBuffer.wrap(body)
@@ -71,7 +73,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
     }
 
     private fun fail(e: IOException) {
-        if (failure == null) failure = if (e is java.io.EOFException) IOException("Соединение закрыто") else e
+        if (failure == null) failure = if (e is java.io.EOFException) IOException(str(R.string.connection_closed)) else e
         pending.values.forEach { it.completeExceptionally(failure) }
         pending.clear()
     }
@@ -108,7 +110,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
 
     private fun Packet.expect(type: Int): Packet {
         if (this.type == FXP_STATUS) checkStatus()
-        if (this.type != type) throw IOException("Неожиданный ответ SFTP ($type/${this.type})")
+        if (this.type != type) throw IOException(str(R.string.unexpected_sftp_reply_2, type, this.type))
         return this
     }
 
@@ -123,7 +125,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
 
     private fun okStatus(type: Int, payload: Payload.() -> Unit) {
         val p = call(type, payload)
-        if (p.type != FXP_STATUS) throw IOException("Неожиданный ответ SFTP")
+        if (p.type != FXP_STATUS) throw IOException(str(R.string.unexpected_sftp_reply))
         p.checkStatus()
     }
 
@@ -146,7 +148,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
                 }
                 p.expect(FXP_NAME)
                 val count = p.buf.getInt()
-                if (count < 0 || result.size + count > MAX_ENTRIES) throw IOException("Слишком много файлов в папке")
+                if (count < 0 || result.size + count > MAX_ENTRIES) throw IOException(str(R.string.too_many_files_in_the_folder))
                 repeat(count) {
                     val name = p.buf.string()
                     p.buf.string() // longname
@@ -283,7 +285,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
     override fun close() {
         runCatching { out.close() }
         runCatching { inp.close() }
-        fail(IOException("Соединение закрыто"))
+        fail(IOException(str(R.string.connection_closed)))
     }
 
     private class Payload {
@@ -347,7 +349,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         private fun ByteBuffer.bytes(): ByteArray {
             val len = getInt()
             // Lengths come from the server: never trust them past the packet.
-            if (len < 0 || len > remaining()) throw IOException("Неверный ответ SFTP")
+            if (len < 0 || len > remaining()) throw IOException(str(R.string.invalid_sftp_reply))
             return ByteArray(len).also { get(it) }
         }
         private fun ByteBuffer.string(): String = String(bytes(), Charsets.UTF_8)
@@ -363,16 +365,16 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
             if (flags and ATTR_ACMODTIME != 0) { getInt(); mtime = getInt().toLong() and 0xffffffffL }
             if (flags and ATTR_EXTENDED != 0) {
                 val count = getInt()
-                if (count < 0 || count > remaining() / 8) throw IOException("Неверный ответ SFTP")
+                if (count < 0 || count > remaining() / 8) throw IOException(str(R.string.invalid_sftp_reply))
                 repeat(count) { bytes(); bytes() }
             }
             return Attrs(size, uid, gid, perms, mtime)
         }
 
         private fun statusText(code: Int, msg: String) = when (code) {
-            2 -> "Файл не найден"
-            3 -> "Нет доступа"
-            else -> msg.ifBlank { "Ошибка SFTP ($code)" }
+            2 -> str(R.string.file_not_found)
+            3 -> str(R.string.permission_denied)
+            else -> msg.ifBlank { str(R.string.sftp_error, code) }
         }
     }
 }

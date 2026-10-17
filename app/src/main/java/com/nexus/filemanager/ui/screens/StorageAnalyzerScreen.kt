@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -131,13 +133,13 @@ fun StorageAnalyzerScreen(
 
             fun stat(c: FileCategory, title: String, color: Color) = CategoryStat(c, title, color, catBytes[c] ?: 0L, catCounts[c] ?: 0)
             val stats = listOf(
-                stat(FileCategory.VIDEO, "Видео", VideoColor),
-                stat(FileCategory.IMAGE, "Изображения", ImageColor),
-                stat(FileCategory.AUDIO, "Аудио", AudioColor),
-                stat(FileCategory.APK, "Установочные APK", ApkColor),
-                stat(FileCategory.ARCHIVE, "Архивы", ArchiveColor),
-                stat(FileCategory.DOCUMENT, "Документы", DocumentColor),
-                stat(FileCategory.OTHER, "Другое", TextColor)
+                stat(FileCategory.VIDEO, str(R.string.videos), VideoColor),
+                stat(FileCategory.IMAGE, str(R.string.images), ImageColor),
+                stat(FileCategory.AUDIO, str(R.string.audio), AudioColor),
+                stat(FileCategory.APK, str(R.string.apk_installers), ApkColor),
+                stat(FileCategory.ARCHIVE, str(R.string.archives), ArchiveColor),
+                stat(FileCategory.DOCUMENT, str(R.string.documents), DocumentColor),
+                stat(FileCategory.OTHER, str(R.string.other), TextColor)
             ).filter { it.totalBytes > 0 }.sortedByDescending { it.totalBytes }
 
             withContext(Dispatchers.Main) {
@@ -153,11 +155,11 @@ fun StorageAnalyzerScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Анализ хранилища", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                    Text(str(R.string.storage_analysis), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -175,7 +177,7 @@ fun StorageAnalyzerScreen(
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Сканирование и анализ файлов...",
+                        str(R.string.scanning_files),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -192,7 +194,7 @@ fun StorageAnalyzerScreen(
                 // Category Distribution Card
                 item {
                     Text(
-                        text = "Распределение по категориям",
+                        text = str(R.string.space_by_type),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -239,7 +241,7 @@ fun StorageAnalyzerScreen(
                 // Top Largest Files
                 item {
                     Text(
-                        text = "Самые большие файлы (Топ 50)",
+                        text = str(R.string.largest_files_top_50),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
@@ -247,7 +249,7 @@ fun StorageAnalyzerScreen(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Все") })
+                        FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text(str(R.string.all)) })
                         categoryStats.forEach { stat ->
                             FilterChip(
                                 selected = filter == stat.category,

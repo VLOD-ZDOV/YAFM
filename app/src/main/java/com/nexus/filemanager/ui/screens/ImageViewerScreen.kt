@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -69,7 +71,7 @@ fun ImageViewerScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
+                            contentDescription = str(R.string.back),
                             tint = Color.White
                         )
                     }
@@ -78,7 +80,7 @@ fun ImageViewerScreen(
                     IconButton(onClick = { shareImage(context, imageFile) }) {
                         Icon(
                             Icons.Default.Share,
-                            contentDescription = "Поделиться",
+                            contentDescription = str(R.string.share),
                             tint = Color.White
                         )
                     }
@@ -123,6 +125,6 @@ private fun shareImage(context: Context, file: File) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Поделиться изображением"))
+        context.startActivity(Intent.createChooser(intent, str(R.string.share_image)))
     } catch (_: Exception) {}
 }

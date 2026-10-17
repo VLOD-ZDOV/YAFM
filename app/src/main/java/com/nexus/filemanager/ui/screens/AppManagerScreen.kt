@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -121,7 +123,7 @@ fun AppManagerScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Поиск приложений...") },
+                            placeholder = { Text(str(R.string.loading_apps)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             trailingIcon = {
@@ -136,11 +138,11 @@ fun AppManagerScreen(
                     } else {
                         Column {
                             Text(
-                                text = "Менеджер приложений",
+                                text = str(R.string.app_manager),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "Всего: ${apps.size} • Отобрано: ${filteredApps.size}",
+                                text = str(R.string.total_shown, apps.size, filteredApps.size),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -149,13 +151,13 @@ fun AppManagerScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
                 actions = {
                     if (!isSearchActive) {
                         IconButton(onClick = { isSearchActive = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Поиск")
+                            Icon(Icons.Default.Search, contentDescription = str(R.string.search))
                         }
                     }
                 },
@@ -178,17 +180,17 @@ fun AppManagerScreen(
                 FilterChip(
                     selected = filter == AppFilter.USER,
                     onClick = { filter = AppFilter.USER },
-                    label = { Text("Пользовательские") }
+                    label = { Text(str(R.string.user)) }
                 )
                 FilterChip(
                     selected = filter == AppFilter.SYSTEM,
                     onClick = { filter = AppFilter.SYSTEM },
-                    label = { Text("Системные") }
+                    label = { Text(str(R.string.system)) }
                 )
                 FilterChip(
                     selected = filter == AppFilter.ALL,
                     onClick = { filter = AppFilter.ALL },
-                    label = { Text("Все") }
+                    label = { Text(str(R.string.all)) }
                 )
             }
 
@@ -211,7 +213,7 @@ fun AppManagerScreen(
                                     val exportedFile = AppManager.extractApk(app)
                                     Toast.makeText(
                                         context,
-                                        "APK сохранен в ${exportedFile.name}",
+                                        str(R.string.apk_saved_to, exportedFile.name),
                                         Toast.LENGTH_LONG
                                     ).show()
                                 }
@@ -221,7 +223,7 @@ fun AppManagerScreen(
                                 if (launchIntent != null) {
                                     context.startActivity(launchIntent)
                                 } else {
-                                    Toast.makeText(context, "Приложение не имеет точки запуска", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, str(R.string.the_app_has_no_launcher_activity), Toast.LENGTH_SHORT).show()
                                 }
                             },
                             onOpenDetails = {
@@ -234,10 +236,10 @@ fun AppManagerScreen(
                                 scope.launch {
                                     val ok = AppManager.uninstallSystemAppRoot(app.packageName)
                                     if (ok) {
-                                        Toast.makeText(context, "Приложение удалено через Root", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, str(R.string.app_removed_with_root), Toast.LENGTH_SHORT).show()
                                         apps = AppManager.getInstalledApps(context)
                                     } else {
-                                        Toast.makeText(context, "Не удалось удалить приложение", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, str(R.string.could_not_remove_the_app), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -341,7 +343,7 @@ fun AppListItem(
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Сохранить APK (Бэкап)") },
+                        text = { Text(str(R.string.save_apk_backup)) },
                         leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -349,7 +351,7 @@ fun AppListItem(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Запустить") },
+                        text = { Text(str(R.string.open)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Launch, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -357,7 +359,7 @@ fun AppListItem(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Свойства в системе") },
+                        text = { Text(str(R.string.system_settings)) },
                         leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -366,7 +368,7 @@ fun AppListItem(
                     )
                     if (isRootAvailable && app.isSystemApp) {
                         DropdownMenuItem(
-                            text = { Text("Удалить через Root", color = RootColor) },
+                            text = { Text(str(R.string.remove_with_root), color = RootColor) },
                             onClick = {
                                 showMenu = false
                                 onRootUninstall()

@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,7 +75,7 @@ fun PermissionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Права доступа (chmod)")
+            Text(str(R.string.permissions_chmod))
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -99,7 +101,7 @@ fun PermissionsDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Восьмеричный код:",
+                            text = str(R.string.octal_code),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
@@ -120,10 +122,10 @@ fun PermissionsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "Класс", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(text = "R (Чт)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(text = "W (Зап)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(text = "X (Исп)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(text = str(R.string.perm_class), modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(text = str(R.string.r_read), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(text = str(R.string.w_write), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(text = str(R.string.x_exec), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
                 // Owner Row
@@ -132,7 +134,7 @@ fun PermissionsDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Владелец", modifier = Modifier.weight(1.5f), fontSize = 13.sp)
+                    Text(str(R.string.owner), modifier = Modifier.weight(1.5f), fontSize = 13.sp)
                     Checkbox(checked = ownerR, onCheckedChange = { ownerR = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = ownerW, onCheckedChange = { ownerW = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = ownerX, onCheckedChange = { ownerX = it }, modifier = Modifier.weight(1f))
@@ -144,7 +146,7 @@ fun PermissionsDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Группа", modifier = Modifier.weight(1.5f), fontSize = 13.sp)
+                    Text(str(R.string.group), modifier = Modifier.weight(1.5f), fontSize = 13.sp)
                     Checkbox(checked = groupR, onCheckedChange = { groupR = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = groupW, onCheckedChange = { groupW = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = groupX, onCheckedChange = { groupX = it }, modifier = Modifier.weight(1f))
@@ -156,7 +158,7 @@ fun PermissionsDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Остальные", modifier = Modifier.weight(1.5f), fontSize = 13.sp)
+                    Text(str(R.string.others), modifier = Modifier.weight(1.5f), fontSize = 13.sp)
                     Checkbox(checked = otherR, onCheckedChange = { otherR = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = otherW, onCheckedChange = { otherW = it }, modifier = Modifier.weight(1f))
                     Checkbox(checked = otherX, onCheckedChange = { otherX = it }, modifier = Modifier.weight(1f))
@@ -165,7 +167,7 @@ fun PermissionsDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Presets
-                Text("Быстрые пресеты:", style = MaterialTheme.typography.labelMedium)
+                Text(str(R.string.presets), style = MaterialTheme.typography.labelMedium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -190,12 +192,12 @@ fun PermissionsDialog(
         },
         confirmButton = {
             Button(onClick = { onApply(octalString) }) {
-                Text("Применить")
+                Text(str(R.string.apply))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text(str(R.string.cancel))
             }
         }
     )

@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +64,7 @@ fun FileDetailsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Свойства файла")
+            Text(str(R.string.file_properties))
         },
         text = {
             Column(
@@ -70,22 +72,22 @@ fun FileDetailsDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                DetailRow(label = "Имя", value = item.name)
+                DetailRow(label = str(R.string.name), value = item.name)
                 DetailRowWithCopy(
-                    label = "Полный путь",
+                    label = str(R.string.full_path),
                     value = item.path,
                     onCopy = {
                         clipboardManager.setText(AnnotatedString(item.path))
-                        Toast.makeText(context, "Путь скопирован", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, str(R.string.path_copied), Toast.LENGTH_SHORT).show()
                     }
                 )
                 if (!item.isDirectory) {
-                    DetailRow(label = "Размер", value = "${item.formattedSize()} (${item.size} байт)")
+                    DetailRow(label = str(R.string.size), value = str(R.string.bytes, item.formattedSize(), item.size))
                 }
-                DetailRow(label = "Изменен", value = item.formattedDate().ifEmpty { "Неизвестно" })
-                DetailRow(label = "Права доступа", value = item.permissions)
-                DetailRow(label = "Владелец / Группа", value = "${item.owner} : ${item.group}")
-                DetailRow(label = "Хранилище", value = item.storageType.name)
+                DetailRow(label = str(R.string.modified), value = item.formattedDate().ifEmpty { str(R.string.unknown) })
+                DetailRow(label = str(R.string.permissions_2), value = item.permissions)
+                DetailRow(label = str(R.string.owner_group), value = "${item.owner} : ${item.group}")
+                DetailRow(label = str(R.string.storage), value = item.storageType.name)
 
                 if (!item.isDirectory) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -97,7 +99,7 @@ fun FileDetailsDialog(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Контрольные суммы",
+                                text = str(R.string.checksums),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -107,11 +109,11 @@ fun FileDetailsDialog(
                                 result != null -> {
                                     HashRow("MD5", result.first) {
                                         clipboardManager.setText(AnnotatedString(result.first))
-                                        Toast.makeText(context, "MD5 скопирован", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, str(R.string.md5_copied), Toast.LENGTH_SHORT).show()
                                     }
                                     HashRow("SHA-256", result.second) {
                                         clipboardManager.setText(AnnotatedString(result.second))
-                                        Toast.makeText(context, "SHA-256 скопирован", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, str(R.string.sha_256_copied), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                                 hashError != null -> Text(hashError ?: "", color = MaterialTheme.colorScheme.error)
@@ -125,13 +127,13 @@ fun FileDetailsDialog(
                                         scope.launch {
                                             runCatching { repository.checksums(item) { hashProgress = it } }
                                                 .onSuccess { hashes = it }
-                                                .onFailure { hashError = "Ошибка: ${it.message}" }
+                                                .onFailure { hashError = str(R.string.error, it.message) }
                                             isCalculatingHash = false
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Вычислить MD5 и SHA-256")
+                                    Text(str(R.string.compute_md5_and_sha_256))
                                 }
                             }
                         }
@@ -141,7 +143,7 @@ fun FileDetailsDialog(
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("Закрыть")
+                Text(str(R.string.close))
             }
         }
     )
@@ -184,7 +186,7 @@ private fun DetailRowWithCopy(label: String, value: String, onCopy: () -> Unit) 
             IconButton(onClick = onCopy) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Копировать",
+                    contentDescription = str(R.string.copy),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -203,7 +205,7 @@ private fun HashRow(label: String, value: String, onCopy: () -> Unit) {
             )
         }
         IconButton(onClick = onCopy) {
-            Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
+            Icon(Icons.Default.ContentCopy, contentDescription = str(R.string.copy))
         }
     }
 }

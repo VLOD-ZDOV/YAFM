@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.fs
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.system.Os
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.StorageType
@@ -28,7 +30,7 @@ class LocalFileSystem(
         val files = File(dir).listFiles()
         if (files == null) {
             if (rootGranted()) return root.list(dir).map { it.copy(storageType = StorageType.LOCAL) }
-            throw IOException("Нет доступа к $dir")
+            throw IOException(str(R.string.no_access_to, dir))
         }
         return files.map { it.toItem() }
     }
@@ -39,24 +41,24 @@ class LocalFileSystem(
 
     override fun mkdir(path: String) = orRoot({
         val dir = File(path)
-        if (!dir.mkdirs() && !dir.isDirectory) throw IOException("Не удалось создать папку")
+        if (!dir.mkdirs() && !dir.isDirectory) throw IOException(str(R.string.could_not_create_the_folder))
     }, { root.mkdir(path) })
 
     override fun createFile(path: String) = orRoot({
-        if (!File(path).createNewFile()) throw IOException("Файл уже существует или нет доступа")
+        if (!File(path).createNewFile()) throw IOException(str(R.string.the_file_already_exists_or_access_is_den))
     }, { root.createFile(path) })
 
     override fun rename(from: String, to: String) = orRoot({
-        if (File(to).exists()) throw IOException("${File(to).name} уже существует")
-        if (!File(from).renameTo(File(to))) throw IOException("Не удалось переименовать")
+        if (File(to).exists()) throw IOException(str(R.string.already_exists, File(to).name))
+        if (!File(from).renameTo(File(to))) throw IOException(str(R.string.could_not_rename))
     }, { root.rename(from, to) })
 
     override fun removeFile(path: String) = orRoot({
-        if (!File(path).delete()) throw IOException("Не удалось удалить")
+        if (!File(path).delete()) throw IOException(str(R.string.could_not_delete_2))
     }, { root.removeFile(path) })
 
     override fun removeDir(path: String) = orRoot({
-        if (!File(path).delete()) throw IOException("Не удалось удалить папку")
+        if (!File(path).delete()) throw IOException(str(R.string.could_not_delete_the_folder))
     }, { root.removeDir(path) })
 
     // Not File.deleteRecursively(): it walks into symlinked directories and deletes what they point to.
@@ -66,7 +68,7 @@ class LocalFileSystem(
         if (!Files.isSymbolicLink(file.toPath()) && file.isDirectory) {
             file.listFiles()?.forEach { deleteNoFollow(it) }
         }
-        if (!file.delete()) throw IOException("Не удалось удалить ${file.name}")
+        if (!file.delete()) throw IOException(str(R.string.could_not_delete, file.name))
     }
 
     override fun chmod(path: String, mode: Int) = orRoot({ Os.chmod(path, mode) }, { root.chmod(path, mode) })

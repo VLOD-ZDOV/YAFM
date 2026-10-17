@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -80,11 +82,11 @@ import java.util.Locale
 import kotlin.math.abs
 
 private val SCALES = listOf(
-    MediaPlayer.ScaleType.SURFACE_BEST_FIT to "Вписать",
-    MediaPlayer.ScaleType.SURFACE_FILL to "Заполнить",
+    MediaPlayer.ScaleType.SURFACE_BEST_FIT to str(R.string.fit),
+    MediaPlayer.ScaleType.SURFACE_FILL to str(R.string.fill),
     MediaPlayer.ScaleType.SURFACE_16_9 to "16:9",
     MediaPlayer.ScaleType.SURFACE_4_3 to "4:3",
-    MediaPlayer.ScaleType.SURFACE_ORIGINAL to "Оригинал"
+    MediaPlayer.ScaleType.SURFACE_ORIGINAL to str(R.string.original)
 )
 private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -241,10 +243,10 @@ fun VideoPlayerScreen(
                             if (locked) return@detectTapGestures
                             if (offset.x < size.width / 2) {
                                 seekBy(-10_000)
-                                hint = "−10 с"
+                                hint = str(R.string.s_10_s_2)
                             } else {
                                 seekBy(10_000)
-                                hint = "+10 с"
+                                hint = str(R.string.s_10_s)
                             }
                         }
                     )
@@ -284,7 +286,7 @@ fun VideoPlayerScreen(
                                     val now = window.attributes.screenBrightness.takeIf { it >= 0 } ?: 0.5f
                                     val value = (now - drag.y / size.height).coerceIn(0.01f, 1f)
                                     window.attributes = window.attributes.apply { screenBrightness = value }
-                                    hint = "Яркость ${(value * 100).toInt()}%"
+                                    hint = str(R.string.brightness, (value * 100).toInt())
                                 }
                                 3 -> {
                                     val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -294,7 +296,7 @@ fun VideoPlayerScreen(
                                         accY = 0f
                                         val v = (audio.getStreamVolume(AudioManager.STREAM_MUSIC) + delta).coerceIn(0, max)
                                         audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
-                                        hint = "Громкость ${v * 100 / max}%"
+                                        hint = str(R.string.volume, v * 100 / max)
                                     }
                                 }
                             }
@@ -317,7 +319,7 @@ fun VideoPlayerScreen(
             if (locked) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     IconButton(onClick = { locked = false; touch() }, modifier = Modifier.align(Alignment.CenterStart).padding(16.dp)) {
-                        Icon(Icons.Default.Lock, contentDescription = "Разблокировать", tint = Color.White)
+                        Icon(Icons.Default.Lock, contentDescription = str(R.string.unlock), tint = Color.White)
                     }
                 }
                 return@AnimatedVisibility
@@ -334,7 +336,7 @@ fun VideoPlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back), tint = Color.White)
                     }
                     Text(
                         current.name,
@@ -345,7 +347,7 @@ fun VideoPlayerScreen(
                     )
                     Box {
                         IconButton(onClick = { menu = "audio"; touch() }) {
-                            Icon(Icons.Default.Audiotrack, contentDescription = "Звуковая дорожка", tint = Color.White)
+                            Icon(Icons.Default.Audiotrack, contentDescription = str(R.string.audio_track), tint = Color.White)
                         }
                         DropdownMenu(expanded = menu == "audio", onDismissRequest = { menu = null }) {
                             (player.audioTracks ?: emptyArray()).forEach { t ->
@@ -358,11 +360,11 @@ fun VideoPlayerScreen(
                     }
                     Box {
                         IconButton(onClick = { menu = "spu"; touch() }) {
-                            Icon(Icons.Default.Subtitles, contentDescription = "Субтитры", tint = Color.White)
+                            Icon(Icons.Default.Subtitles, contentDescription = str(R.string.subtitles), tint = Color.White)
                         }
                         DropdownMenu(expanded = menu == "spu", onDismissRequest = { menu = null }) {
                             val tracks = player.spuTracks ?: emptyArray()
-                            if (tracks.isEmpty()) DropdownMenuItem(text = { Text("Нет субтитров") }, onClick = { menu = null })
+                            if (tracks.isEmpty()) DropdownMenuItem(text = { Text(str(R.string.no_subtitles)) }, onClick = { menu = null })
                             tracks.forEach { t ->
                                 DropdownMenuItem(
                                     text = { Text((if (t.id == player.spuTrack) "• " else "") + t.name) },
@@ -373,7 +375,7 @@ fun VideoPlayerScreen(
                     }
                     Box {
                         IconButton(onClick = { menu = "speed"; touch() }) {
-                            Icon(Icons.Default.Speed, contentDescription = "Скорость", tint = Color.White)
+                            Icon(Icons.Default.Speed, contentDescription = str(R.string.speed), tint = Color.White)
                         }
                         DropdownMenu(expanded = menu == "speed", onDismissRequest = { menu = null }) {
                             SPEEDS.forEach { s ->
@@ -390,7 +392,7 @@ fun VideoPlayerScreen(
                         hint = SCALES[scaleIndex].second
                         touch()
                     }) {
-                        Icon(Icons.Default.AspectRatio, contentDescription = "Кадр", tint = Color.White)
+                        Icon(Icons.Default.AspectRatio, contentDescription = str(R.string.frame), tint = Color.White)
                     }
                     IconButton(onClick = {
                         activity.requestedOrientation =
@@ -399,10 +401,10 @@ fun VideoPlayerScreen(
                             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         touch()
                     }) {
-                        Icon(Icons.Default.ScreenRotation, contentDescription = "Повернуть", tint = Color.White)
+                        Icon(Icons.Default.ScreenRotation, contentDescription = str(R.string.rotate), tint = Color.White)
                     }
                     IconButton(onClick = { locked = true; controls = false }) {
-                        Icon(Icons.Default.LockOpen, contentDescription = "Заблокировать", tint = Color.White)
+                        Icon(Icons.Default.LockOpen, contentDescription = str(R.string.lock), tint = Color.White)
                     }
                 }
 
@@ -413,10 +415,10 @@ fun VideoPlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { playlist.getOrNull(index - 1)?.let { open(it) }; touch() }, enabled = index > 0) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Предыдущее", tint = Color.White, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous_2), tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { seekBy(-10_000) }) {
-                        Icon(Icons.Default.Replay10, contentDescription = "−10 с", tint = Color.White, modifier = Modifier.size(36.dp))
+                        Icon(Icons.Default.Replay10, contentDescription = str(R.string.s_10_s_2), tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(
                         onClick = { if (player.isPlaying) player.pause() else player.play(); touch() },
@@ -424,19 +426,19 @@ fun VideoPlayerScreen(
                     ) {
                         Icon(
                             if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playing) "Пауза" else "Играть",
+                            contentDescription = if (playing) str(R.string.pause) else str(R.string.play),
                             tint = Color.White,
                             modifier = Modifier.size(56.dp)
                         )
                     }
                     IconButton(onClick = { seekBy(10_000) }) {
-                        Icon(Icons.Default.Forward10, contentDescription = "+10 с", tint = Color.White, modifier = Modifier.size(36.dp))
+                        Icon(Icons.Default.Forward10, contentDescription = str(R.string.s_10_s), tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(
                         onClick = { playlist.getOrNull(index + 1)?.let { open(it) }; touch() },
                         enabled = index >= 0 && index < playlist.size - 1
                     ) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Следующее", tint = Color.White, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.SkipNext, contentDescription = str(R.string.next_2), tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                 }
 

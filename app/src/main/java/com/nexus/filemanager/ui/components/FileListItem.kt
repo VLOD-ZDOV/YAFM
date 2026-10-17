@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import java.io.File
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.LocalContext
@@ -177,7 +179,7 @@ fun FileListItem(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Свойства") },
+                            text = { Text(str(R.string.properties)) },
                             onClick = {
                                 showMenu = false
                                 onDetails()
@@ -185,7 +187,7 @@ fun FileListItem(
                         )
                         if (item.storageType != StorageType.SMB) {
                             DropdownMenuItem(
-                                text = { Text("Права (chmod)") },
+                                text = { Text(str(R.string.permissions_chmod_2)) },
                                 onClick = {
                                     showMenu = false
                                     onPermissions()
@@ -193,14 +195,14 @@ fun FileListItem(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Переименовать") },
+                            text = { Text(str(R.string.rename)) },
                             onClick = {
                                 showMenu = false
                                 onRename()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Удалить", color = MaterialTheme.colorScheme.error) },
+                            text = { Text(str(R.string.delete), color = MaterialTheme.colorScheme.error) },
                             onClick = {
                                 showMenu = false
                                 onDelete()

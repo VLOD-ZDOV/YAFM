@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.ComponentName
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -142,10 +144,10 @@ fun AudioPlayerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Музыка") },
+                title = { Text(str(R.string.music)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 }
             )
@@ -205,12 +207,12 @@ fun AudioPlayerScreen(
                 IconButton(onClick = { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }) {
                     Icon(
                         Icons.Default.Shuffle,
-                        contentDescription = "Перемешать",
+                        contentDescription = str(R.string.shuffle),
                         tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = { controller?.seekToPrevious() }) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Предыдущий", modifier = Modifier.size(36.dp))
+                    Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous), modifier = Modifier.size(36.dp))
                 }
                 FilledIconButton(
                     onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
@@ -218,12 +220,12 @@ fun AudioPlayerScreen(
                 ) {
                     Icon(
                         if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Пауза" else "Играть",
+                        contentDescription = if (playing) str(R.string.pause) else str(R.string.play),
                         modifier = Modifier.size(36.dp)
                     )
                 }
                 IconButton(onClick = { controller?.seekToNext() }) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Следующий", modifier = Modifier.size(36.dp))
+                    Icon(Icons.Default.SkipNext, contentDescription = str(R.string.next), modifier = Modifier.size(36.dp))
                 }
                 IconButton(onClick = {
                     controller?.let {
@@ -236,7 +238,7 @@ fun AudioPlayerScreen(
                 }) {
                     Icon(
                         if (repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                        contentDescription = "Повтор",
+                        contentDescription = str(R.string.repeat),
                         tint = if (repeat != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

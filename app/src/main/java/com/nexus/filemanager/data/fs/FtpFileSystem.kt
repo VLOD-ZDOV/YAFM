@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.fs
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageType
@@ -28,12 +30,12 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         ftp.connect(config.host, config.port)
         if (!FTPReply.isPositiveCompletion(ftp.replyCode)) {
             ftp.disconnect()
-            throw IOException("FTP-сервер отклонил подключение (код ${ftp.replyCode})")
+            throw IOException(str(R.string.the_ftp_server_refused_the_connection_co, ftp.replyCode))
         }
         val anonymous = config.isAnonymous || config.username.isEmpty()
         if (!ftp.login(if (anonymous) "anonymous" else config.username, if (anonymous) "anonymous" else config.password)) {
             ftp.disconnect()
-            throw IOException("FTP: неверный логин или пароль")
+            throw IOException(str(R.string.ftp_wrong_user_name_or_password))
         }
         ftp.enterLocalPassiveMode()
         ftp.setFileType(FTP.BINARY_FILE_TYPE)
@@ -42,7 +44,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
 
     /** A line break in a path would end the FTP command and start another one chosen by the file's name. */
     private fun checked(path: String): String {
-        if ('\r' in path || '\n' in path) throw IOException("Имя с переводом строки не поддерживается по FTP")
+        if ('\r' in path || '\n' in path) throw IOException(str(R.string.names_with_line_breaks_are_not_supported))
         return path
     }
 
@@ -54,7 +56,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
     }
 
     private fun FTPClient.check(ok: Boolean) {
-        if (!ok) throw IOException(replyString?.trim() ?: "Ошибка FTP")
+        if (!ok) throw IOException(replyString?.trim() ?: str(R.string.ftp_error))
     }
 
     override fun list(dir: String): List<FileItem> = command { ftp ->
@@ -89,7 +91,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         val stream = ftp.retrieveFileStream(checked(path)) ?: run {
             val reply = ftp.replyString
             ftp.disconnect()
-            throw IOException(reply?.trim() ?: "Не удалось открыть файл")
+            throw IOException(reply?.trim() ?: str(R.string.could_not_open_the_file_2))
         }
         return object : FilterInputStream(stream) {
             override fun close() {
@@ -103,7 +105,7 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         val stream = ftp.storeFileStream(checked(path)) ?: run {
             val reply = ftp.replyString
             ftp.disconnect()
-            throw IOException(reply?.trim() ?: "Не удалось записать файл")
+            throw IOException(reply?.trim() ?: str(R.string.could_not_write_the_file))
         }
         return object : FilterOutputStream(stream) {
             override fun write(b: ByteArray, off: Int, len: Int) = out.write(b, off, len)

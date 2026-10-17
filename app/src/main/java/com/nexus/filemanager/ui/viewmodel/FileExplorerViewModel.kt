@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.viewmodel
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.app.Application
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
@@ -252,7 +254,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
         val title = when (loc.type) {
             StorageType.ROOT -> "Root (/)"
-            StorageType.LOCAL -> if (base == internalRoot) "Память" else "/"
+            StorageType.LOCAL -> if (base == internalRoot) str(R.string.storage_2) else "/"
             else -> loc.server?.name ?: loc.type.name
         }
         val segments = mutableListOf(PathSegment(title, base))
@@ -265,11 +267,11 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun categoryTitle(category: FileCategory) = when (category) {
-        FileCategory.IMAGE -> "Все изображения"
-        FileCategory.VIDEO -> "Все видео"
-        FileCategory.AUDIO -> "Вся музыка"
-        FileCategory.DOCUMENT -> "Все документы"
-        FileCategory.ARCHIVE -> "Все архивы"
+        FileCategory.IMAGE -> str(R.string.all_images)
+        FileCategory.VIDEO -> str(R.string.all_videos)
+        FileCategory.AUDIO -> str(R.string.all_music)
+        FileCategory.DOCUMENT -> str(R.string.all_documents)
+        FileCategory.ARCHIVE -> str(R.string.all_archives)
         else -> category.name
     }
 
@@ -347,8 +349,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             val skipped = repository.transfer(items, _location.value, move) { _progress.value = it }
             clearClipboard()
             _messages.tryEmit(
-                (if (move) "Перемещено: ${items.size}" else "Скопировано: ${items.size}") +
-                    if (skipped > 0) ". Ссылки на папки не копируются, пропущено: $skipped" else ""
+                (if (move) str(R.string.moved, items.size) else str(R.string.copied, items.size)) +
+                    if (skipped > 0) str(R.string.links_to_folders_are_not_copied_skipped, skipped) else ""
             )
         }
     }
@@ -383,7 +385,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteItems(items: List<FileItem>, onDone: () -> Unit = {}) {
-        operation("Удалено: ${items.size}") {
+        operation(str(R.string.deleted, items.size)) {
             items.forEachIndexed { i, item ->
                 _progress.value = "${i + 1}/${items.size}: ${item.name}"
                 repository.delete(item)
@@ -398,14 +400,14 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun createNewFile(name: String) = operation { repository.createFile(_location.value, name) }
 
-    fun changePermissions(item: FileItem, octal: String) = operation("Права изменены") {
+    fun changePermissions(item: FileItem, octal: String) = operation(str(R.string.permissions_changed)) {
         repository.changePermissions(item, octal)
     }
 
     /** Opens a file in a viewer or another app: remote files are fetched to the cache first. */
     fun withLocalCopy(item: FileItem, onReady: (File) -> Unit) {
         viewModelScope.launch {
-            _progress.value = "Загрузка ${item.name}…"
+            _progress.value = str(R.string.loading, item.name)
             try {
                 onReady(repository.materialize(item))
             } catch (e: Exception) {
@@ -468,7 +470,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun batchRenameSelected(prefix: String, suffix: String, find: String, replace: String, addIndex: Boolean) {
         val items = _selectedItems.value.toList()
         clearSelection()
-        operation("Переименовано: ${items.size}") {
+        operation(str(R.string.renamed, items.size)) {
             items.forEachIndexed { i, item ->
                 val newName = batchName(item, i, prefix, suffix, find, replace, addIndex)
                 if (newName != item.name) repository.rename(item, newName)
@@ -485,7 +487,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun pairQsh(config: ServerConfig, code: String, onResult: (ok: Boolean, message: String) -> Unit) {
         viewModelScope.launch {
             runCatching { repository.pairQsh(config, code) }
-                .onSuccess { onResult(true, it.ifBlank { "Связано" }) }
+                .onSuccess { onResult(true, it.ifBlank { str(R.string.paired) }) }
                 .onFailure { onResult(false, describe(it)) }
         }
     }
@@ -524,7 +526,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 val apk = updater.download(release) { _update.value = UpdateState.Downloading(release, it) }
                 _update.value = UpdateState.Idle
                 if (!updater.install(apk)) {
-                    _messages.tryEmit("Разрешите установку из YAFM и нажмите «Обновить» ещё раз")
+                    _messages.tryEmit(str(R.string.allow_installs_from_yafm_then_tap_update))
                     _update.value = UpdateState.Available(release)
                 }
             } catch (e: Exception) {
@@ -551,10 +553,10 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             val name = e.javaClass.simpleName
             return when {
                 name == "JSchChangedHostKeyException" ->
-                    "Ключ сервера изменился. Возможна подмена сервера, подключение отменено."
-                e is java.net.UnknownHostException -> "Сервер не найден: ${e.message}"
-                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> "Сервер не отвечает"
-                name == "JSchException" && e.message?.contains("Auth fail") == true -> "Неверный логин или пароль"
+                    str(R.string.the_server_s_key_has_changed_the_server)
+                e is java.net.UnknownHostException -> str(R.string.server_not_found, e.message)
+                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> str(R.string.the_server_does_not_answer)
+                name == "JSchException" && e.message?.contains("Auth fail") == true -> str(R.string.wrong_user_name_or_password)
                 else -> e.message?.takeIf { it.isNotBlank() } ?: name
             }
         }

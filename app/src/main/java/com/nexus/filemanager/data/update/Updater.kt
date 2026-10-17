@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.update
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -35,7 +37,7 @@ class Updater(private val context: Context) {
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         try {
             if (conn.responseCode == 404) return@withContext null
-            if (conn.responseCode != 200) throw IOException("GitHub: код ${conn.responseCode}")
+            if (conn.responseCode != 200) throw IOException(str(R.string.github_code, conn.responseCode))
             val json = JSONObject(conn.inputStream.bufferedReader().readText())
             val version = json.getString("tag_name").removePrefix("v")
             if (!isNewer(version, currentVersion)) return@withContext null
@@ -60,7 +62,7 @@ class Updater(private val context: Context) {
         conn.connectTimeout = 10_000
         conn.readTimeout = 30_000
         try {
-            if (conn.responseCode != 200) throw IOException("Загрузка: код ${conn.responseCode}")
+            if (conn.responseCode != 200) throw IOException(str(R.string.download_code, conn.responseCode))
             val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.apkSize
             conn.inputStream.use { input ->
                 out.outputStream().use { output ->

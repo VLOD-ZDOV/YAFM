@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -63,7 +65,7 @@ fun BatchRenameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Пакетное переименование (${items.size})")
+            Text(str(R.string.batch_rename, items.size))
         },
         text = {
             Column(
@@ -74,7 +76,7 @@ fun BatchRenameDialog(
                 OutlinedTextField(
                     value = prefix,
                     onValueChange = { prefix = it },
-                    label = { Text("Префикс (в начало)") },
+                    label = { Text(str(R.string.prefix_at_the_start)) },
                     placeholder = { Text("Photo_") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -85,7 +87,7 @@ fun BatchRenameDialog(
                 OutlinedTextField(
                     value = suffix,
                     onValueChange = { suffix = it },
-                    label = { Text("Суффикс (в конец)") },
+                    label = { Text(str(R.string.suffix_at_the_end)) },
                     placeholder = { Text("_backup") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -97,7 +99,7 @@ fun BatchRenameDialog(
                     OutlinedTextField(
                         value = findText,
                         onValueChange = { findText = it },
-                        label = { Text("Найти") },
+                        label = { Text(str(R.string.find)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -105,7 +107,7 @@ fun BatchRenameDialog(
                     OutlinedTextField(
                         value = replaceText,
                         onValueChange = { replaceText = it },
-                        label = { Text("Заменить на") },
+                        label = { Text(str(R.string.replace_with)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -118,7 +120,7 @@ fun BatchRenameDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(checked = addIndex, onCheckedChange = { addIndex = it })
-                    Text("Добавить порядковый номер (_1, _2)", style = MaterialTheme.typography.bodyMedium)
+                    Text(str(R.string.add_a_number), style = MaterialTheme.typography.bodyMedium)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -131,7 +133,7 @@ fun BatchRenameDialog(
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(
-                            text = "Предпросмотр (первые 3):",
+                            text = str(R.string.preview_first),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -151,12 +153,12 @@ fun BatchRenameDialog(
             Button(onClick = {
                 onApply(prefix, suffix, findText, replaceText, addIndex)
             }) {
-                Text("Переименовать все")
+                Text(str(R.string.rename_all))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text(str(R.string.cancel))
             }
         }
     )

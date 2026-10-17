@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -108,12 +110,12 @@ fun StorageGaugeCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Занято: ${stats.formattedUsed()} / ${stats.formattedTotal()}",
+                    text = str(R.string.used, stats.formattedUsed(), stats.formattedTotal()),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Свободно: ${stats.formattedFree()}",
+                    text = str(R.string.free, stats.formattedFree()),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

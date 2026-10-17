@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,7 +97,7 @@ fun ServerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initialConfig == null) "Новое сетевое подключение" else "Редактировать сервер")
+            Text(if (initialConfig == null) str(R.string.new_network_connection) else str(R.string.edit_server))
         },
         text = {
             Column(
@@ -103,7 +105,7 @@ fun ServerDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                Text("Протокол:", style = MaterialTheme.typography.labelMedium)
+                Text(str(R.string.protocol), style = MaterialTheme.typography.labelMedium)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -131,7 +133,7 @@ fun ServerDialog(
 
                 if (isQsh && !qshAvailable) {
                     Text(
-                        "В этой сборке нет qsh (libqsh.so). Подключение можно сохранить, но открыть не получится.",
+                        str(R.string.this_build_has_no_qsh_libqsh_so_the_conn),
                         color = DangerRed,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -142,8 +144,8 @@ fun ServerDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Имя подключения (необязательно)") },
-                    placeholder = { Text("Например: Домашний сервер") },
+                    label = { Text(str(R.string.connection_name_optional)) },
+                    placeholder = { Text(str(R.string.for_example_home_server)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -154,7 +156,7 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = host,
                         onValueChange = { host = it },
-                        label = { Text("Хост / IP") },
+                        label = { Text(str(R.string.host_ip)) },
                         placeholder = { Text("192.168.1.100") },
                         modifier = Modifier.weight(2.5f),
                         singleLine = true
@@ -163,7 +165,7 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = port,
                         onValueChange = { port = it.filter(Char::isDigit) },
-                        label = { Text("Порт") },
+                        label = { Text(str(R.string.port)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -175,7 +177,7 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = shareName,
                         onValueChange = { shareName = it },
-                        label = { Text("Имя общего ресурса (Share)") },
+                        label = { Text(str(R.string.share_name)) },
                         placeholder = { Text("shared / public / downloads") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -184,8 +186,8 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = remotePath,
                         onValueChange = { remotePath = it },
-                        label = { Text("Начальная папка") },
-                        placeholder = { Text(if (protocol == StorageType.FTP) "/" else "домашняя папка") },
+                        label = { Text(str(R.string.start_folder)) },
+                        placeholder = { Text(if (protocol == StorageType.FTP) "/" else str(R.string.home_folder)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -199,7 +201,7 @@ fun ServerDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(checked = isAnonymous, onCheckedChange = { isAnonymous = it })
-                        Text("Анонимный вход (гость)", style = MaterialTheme.typography.bodyMedium)
+                        Text(str(R.string.anonymous_guest), style = MaterialTheme.typography.bodyMedium)
                     }
                 } else {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -209,7 +211,7 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
-                        label = { Text("Имя пользователя") },
+                        label = { Text(str(R.string.user_name)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -220,7 +222,7 @@ fun ServerDialog(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Пароль") },
+                        label = { Text(str(R.string.password)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -238,7 +240,7 @@ fun ServerDialog(
                 if (isQsh) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Вход по ключу этого телефона. Один раз свяжите его с сервером: выполните там `qshd pair` под этим пользователем и введите код.",
+                        str(R.string.signs_in_with_this_phone_s_key_link_it_t),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -247,7 +249,7 @@ fun ServerDialog(
                         OutlinedTextField(
                             value = pairCode,
                             onValueChange = { pairCode = it },
-                            label = { Text("Код связывания") },
+                            label = { Text(str(R.string.pairing_code)) },
                             placeholder = { Text("k7f3-9qxm") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
@@ -265,7 +267,7 @@ fun ServerDialog(
                             },
                             enabled = ready && pairCode.isNotBlank() && !busy && qshAvailable
                         ) {
-                            Text("Связать")
+                            Text(str(R.string.pair))
                         }
                     }
                 }
@@ -291,9 +293,9 @@ fun ServerDialog(
                         if (busy) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Подключение...")
+                            Text(str(R.string.connecting))
                         } else {
-                            Text("Проверить связь")
+                            Text(str(R.string.test_connection))
                         }
                     }
                 }
@@ -311,7 +313,7 @@ fun ServerDialog(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = if (ok) "Работает" else error,
+                            text = if (ok) str(R.string.works) else error,
                             color = if (ok) SuccessGreen else DangerRed,
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
                             modifier = Modifier.padding(start = 4.dp)
@@ -322,12 +324,12 @@ fun ServerDialog(
         },
         confirmButton = {
             Button(onClick = { onSave(buildConfig()) }, enabled = ready) {
-                Text("Сохранить")
+                Text(str(R.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text(str(R.string.cancel))
             }
         }
     )

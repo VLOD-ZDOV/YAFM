@@ -1,5 +1,11 @@
 package com.nexus.filemanager.ui.screens
 
+import android.provider.Settings
+import android.os.Build
+import android.net.Uri
+import android.content.Intent
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,10 +72,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Настройки") },
+                title = { Text(str(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 }
             )
@@ -83,34 +89,45 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Section("Оформление")
+            Section(str(R.string.appearance))
             listOf(
-                ThemeMode.SYSTEM to "Как в системе",
-                ThemeMode.LIGHT to "Светлая",
-                ThemeMode.DARK to "Тёмная",
-                ThemeMode.AMOLED to "AMOLED (чёрная)"
+                ThemeMode.SYSTEM to str(R.string.system_default),
+                ThemeMode.LIGHT to str(R.string.light),
+                ThemeMode.DARK to str(R.string.dark),
+                ThemeMode.AMOLED to str(R.string.amoled_black)
             ).forEach { (mode, label) ->
                 Choice(label, settings.theme == mode) { viewModel.settings.update { it.copy(theme = mode) } }
             }
-            Toggle("Цвета обоев (Material You)", settings.dynamicColor) { on ->
+            Toggle(str(R.string.wallpaper_colors_material_you), settings.dynamicColor) { on ->
                 viewModel.settings.update { it.copy(dynamicColor = on) }
             }
 
-            Section("Файлы")
-            Toggle("Показывать скрытые файлы", settings.showHidden) { viewModel.toggleHiddenFiles() }
+            // Android 13+ keeps a language per app in its own settings page.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Section(str(R.string.language))
+                val ctx = LocalContext.current
+                OutlinedButton(onClick = {
+                    ctx.startActivity(
+                        Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+                    )
+                }) { Text(str(R.string.choose_app_language)) }
+            }
 
-            Section("Видео открывать")
+            Section(str(R.string.files))
+            Toggle(str(R.string.show_hidden_files_2), settings.showHidden) { viewModel.toggleHiddenFiles() }
+
+            Section(str(R.string.open_videos))
             listOf(
-                VideoPlayer.ASK to "Спрашивать каждый раз",
-                VideoPlayer.BUILT_IN to "Во встроенном плеере",
-                VideoPlayer.SYSTEM to "В другом приложении"
+                VideoPlayer.ASK to str(R.string.ask_every_time),
+                VideoPlayer.BUILT_IN to str(R.string.in_the_built_in_player),
+                VideoPlayer.SYSTEM to str(R.string.in_another_app)
             ).forEach { (choice, label) ->
                 Choice(label, settings.videoPlayer == choice) { viewModel.settings.update { it.copy(videoPlayer = choice) } }
             }
 
-            Section("Ключ qsh этого телефона")
+            Section(str(R.string.this_phone_s_qsh_key))
             Text(
-                "Вход на серверы qsh идёт по этому ключу. Его можно связать с сервером через «qshd pair» в окне сервера или добавить вручную в ~/.config/qsh/authorized_keys на сервере.",
+                str(R.string.qsh_servers_are_signed_in_to_with_this_k),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -126,24 +143,24 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             val key = runCatching { withContext(Dispatchers.IO) { viewModel.repository.qsh.publicKey() } }
-                                .getOrElse { e -> "Ошибка: ${e.message}" }
+                                .getOrElse { e -> str(R.string.error, e.message) }
                             publicKey = key
-                            if (!key.startsWith("Ошибка")) {
+                            if (!key.startsWith(str(R.string.error_2))) {
                                 clipboard.setText(AnnotatedString(key))
-                                Toast.makeText(context, "Ключ скопирован", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, str(R.string.key_copied), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                     enabled = viewModel.repository.qsh.isAvailable
-                ) { Text(if (publicKey == null) "Показать и скопировать" else "Скопировать") }
+                ) { Text(if (publicKey == null) str(R.string.show_and_copy) else str(R.string.copy_2)) }
             }
 
-            Section("Обновления")
-            Toggle("Проверять при запуске", settings.autoUpdate) { on ->
+            Section(str(R.string.updates))
+            Toggle(str(R.string.check_at_startup), settings.autoUpdate) { on ->
                 viewModel.settings.update { it.copy(autoUpdate = on) }
             }
             Text(
-                "Установлена версия ${viewModel.updater.currentVersion}",
+                str(R.string.installed_version, viewModel.updater.currentVersion),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -151,14 +168,14 @@ fun SettingsScreen(
             when (val u = update) {
                 is UpdateState.Checking -> LinearProgressIndicator(Modifier.fillMaxWidth())
                 is UpdateState.Downloading -> LinearProgressIndicator(progress = { u.progress }, modifier = Modifier.fillMaxWidth())
-                is UpdateState.UpToDate -> Text("Это последняя версия", color = MaterialTheme.colorScheme.primary)
-                is UpdateState.Failed -> Text("Не удалось проверить: ${u.message}", color = MaterialTheme.colorScheme.error)
+                is UpdateState.UpToDate -> Text(str(R.string.this_is_the_latest_version), color = MaterialTheme.colorScheme.primary)
+                is UpdateState.Failed -> Text(str(R.string.could_not_check, u.message), color = MaterialTheme.colorScheme.error)
                 else -> {}
             }
             OutlinedButton(
                 onClick = { viewModel.checkForUpdates(manual = true) },
                 enabled = update !is UpdateState.Checking && update !is UpdateState.Downloading
-            ) { Text("Проверить сейчас") }
+            ) { Text(str(R.string.check_now)) }
 
             Spacer(Modifier.height(24.dp))
         }

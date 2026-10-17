@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
@@ -89,7 +91,7 @@ fun TextEditorScreen(
             originalContent = text
         } catch (e: Exception) {
             loadFailed = true
-            Toast.makeText(context, "Ошибка чтения: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, str(R.string.could_not_read, e.message), Toast.LENGTH_LONG).show()
         } finally {
             isLoading = false
         }
@@ -126,7 +128,7 @@ fun TextEditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
                 actions = {
@@ -135,7 +137,7 @@ fun TextEditorScreen(
                             fontSize = if (fontSize >= 18f) 11f else fontSize + 2f
                         }
                     ) {
-                        Icon(Icons.Default.FormatSize, contentDescription = "Размер шрифта")
+                        Icon(Icons.Default.FormatSize, contentDescription = str(R.string.font_size))
                     }
 
                     IconButton(
@@ -145,9 +147,9 @@ fun TextEditorScreen(
                                 try {
                                     repository.writeText(fileItem, content)
                                     originalContent = content
-                                    Toast.makeText(context, "Файл сохранён", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, str(R.string.file_saved), Toast.LENGTH_SHORT).show()
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Не удалось сохранить: ${e.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, str(R.string.could_not_save, e.message), Toast.LENGTH_LONG).show()
                                 } finally {
                                     isSaving = false
                                 }
@@ -160,7 +162,7 @@ fun TextEditorScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Save,
-                                contentDescription = "Сохранить",
+                                contentDescription = str(R.string.save),
                                 tint = if (isModified) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

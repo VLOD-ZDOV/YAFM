@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.fs
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.StorageType
 import com.nexus.filemanager.data.root.RootCommander
@@ -18,7 +20,7 @@ class RootFileSystem : FileSystem {
     private fun run(command: String): RootCommander.CommandResult {
         val result = RootCommander.executeBlocking(command)
         if (!result.isSuccess) {
-            throw IOException(result.stderr.joinToString(" ").ifBlank { "Команда root завершилась с ошибкой" })
+            throw IOException(result.stderr.joinToString(" ").ifBlank { str(R.string.the_root_command_failed) })
         }
         return result
     }
@@ -45,7 +47,7 @@ class RootFileSystem : FileSystem {
         process.destroy()
         if (data.isEmpty()) {
             if (RootCommander.executeBlocking("[ -d $q ]").isSuccess) return emptyList()
-            throw IOException("Не удалось открыть $dir")
+            throw IOException(str(R.string.could_not_open, dir))
         }
 
         val items = mutableListOf<FileItem>()
@@ -125,7 +127,7 @@ class RootFileSystem : FileSystem {
         val code = process.waitFor()
         val err = process.errorStream.bufferedReader().readText().trim()
         process.destroy()
-        if (code != 0) throw IOException(err.ifEmpty { "root: код $code" })
+        if (code != 0) throw IOException(err.ifEmpty { str(R.string.root_exit_code, code) })
     }
 
     override fun mkdir(path: String) { run("mkdir -p ${shellQuote(path)}") }

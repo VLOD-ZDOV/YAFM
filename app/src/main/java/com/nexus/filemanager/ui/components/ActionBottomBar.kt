@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -84,7 +86,7 @@ fun ActionBottomBar(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Выбрано: $selectedCount",
+                        text = str(R.string.selected, selectedCount),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -93,10 +95,10 @@ fun ActionBottomBar(
                         TextButton(onClick = onSelectAll) {
                             Icon(Icons.Default.SelectAll, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Все")
+                            Text(str(R.string.all))
                         }
                         IconButton(onClick = onClearSelection) {
-                            Icon(Icons.Default.Close, contentDescription = "Отмена")
+                            Icon(Icons.Default.Close, contentDescription = str(R.string.cancel))
                         }
                     }
                 }
@@ -108,20 +110,20 @@ fun ActionBottomBar(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     if (hasArchiveSelected) {
-                        ActionButton(icon = Icons.Default.Unarchive, label = "Извлечь", onClick = onExtract)
+                        ActionButton(icon = Icons.Default.Unarchive, label = str(R.string.extract), onClick = onExtract)
                     }
-                    ActionButton(icon = Icons.Default.FolderZip, label = "В ZIP", onClick = onCompress)
+                    ActionButton(icon = Icons.Default.FolderZip, label = str(R.string.to_zip), onClick = onCompress)
                     if (selectedCount > 1) {
-                        ActionButton(icon = Icons.Default.DriveFileRenameOutline, label = "Пакетное", onClick = onBatchRename)
+                        ActionButton(icon = Icons.Default.DriveFileRenameOutline, label = str(R.string.batch), onClick = onBatchRename)
                     }
-                    ActionButton(icon = Icons.Default.ContentCopy, label = "Копировать", onClick = onCopy)
-                    ActionButton(icon = Icons.Default.ContentCut, label = "Вырезать", onClick = onCut)
+                    ActionButton(icon = Icons.Default.ContentCopy, label = str(R.string.copy), onClick = onCopy)
+                    ActionButton(icon = Icons.Default.ContentCut, label = str(R.string.cut), onClick = onCut)
                     if (canChangePermissions) {
-                        ActionButton(icon = Icons.Default.Lock, label = "Права", onClick = onPermissions)
+                        ActionButton(icon = Icons.Default.Lock, label = str(R.string.permissions), onClick = onPermissions)
                     }
                     ActionButton(
                         icon = Icons.Default.Delete,
-                        label = "Удалить",
+                        label = str(R.string.delete),
                         onClick = onDelete,
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -190,7 +192,7 @@ fun PasteFloatingBar(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "${if (operation == ClipboardOp.COPY) "Копирование" else "Перемещение"} ($itemCount)",
+                        text = if (operation == ClipboardOp.COPY) str(R.string.copying, itemCount) else str(R.string.moving, itemCount),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -198,7 +200,7 @@ fun PasteFloatingBar(
 
                 Row {
                     TextButton(onClick = onCancel) {
-                        Text("Отмена", color = MaterialTheme.colorScheme.error)
+                        Text(str(R.string.cancel), color = MaterialTheme.colorScheme.error)
                     }
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -210,7 +212,7 @@ fun PasteFloatingBar(
                     ) {
                         Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Вставить")
+                        Text(str(R.string.paste))
                     }
                 }
             }

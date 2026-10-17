@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,7 +35,7 @@ fun UpdateDialog(viewModel: FileExplorerViewModel) {
     val downloading = state as? UpdateState.Downloading
     AlertDialog(
         onDismissRequest = { if (downloading == null) viewModel.dismissUpdate() },
-        title = { Text("Доступна версия ${release.version}") },
+        title = { Text(str(R.string.version_is_available, release.version)) },
         text = {
             Column {
                 if (release.notes.isNotBlank()) {
@@ -52,10 +54,10 @@ fun UpdateDialog(viewModel: FileExplorerViewModel) {
             }
         },
         confirmButton = {
-            Button(onClick = { viewModel.installUpdate(release) }, enabled = downloading == null) { Text("Обновить") }
+            Button(onClick = { viewModel.installUpdate(release) }, enabled = downloading == null) { Text(str(R.string.update)) }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.dismissUpdate() }, enabled = downloading == null) { Text("Позже") }
+            TextButton(onClick = { viewModel.dismissUpdate() }, enabled = downloading == null) { Text(str(R.string.later)) }
         }
     )
 }

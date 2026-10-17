@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -44,10 +46,10 @@ fun CodeDialog(viewModel: FileExplorerViewModel) {
             }
         },
         confirmButton = {
-            Button(onClick = { viewModel.submitCode(code) }, enabled = code.isNotEmpty()) { Text("Войти") }
+            Button(onClick = { viewModel.submitCode(code) }, enabled = code.isNotEmpty()) { Text(str(R.string.sign_in)) }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.cancelCode() }) { Text("Отмена") }
+            TextButton(onClick = { viewModel.cancelCode() }) { Text(str(R.string.cancel)) }
         }
     )
 }

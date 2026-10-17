@@ -26,6 +26,7 @@
 
     <application
         android:name=".YafmApp"
+        android:localeConfig="@xml/locales_config"
         android:allowBackup="false"
         android:dataExtractionRules="@null"
         android:fullBackupContent="@null"

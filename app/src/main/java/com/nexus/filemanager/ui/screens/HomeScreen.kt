@@ -1,5 +1,6 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
 import androidx.compose.ui.res.stringResource
 import com.nexus.filemanager.R
 import android.os.Environment
@@ -121,12 +122,12 @@ fun HomeScreen(
     val categories = remember {
         val root = Environment.getExternalStorageDirectory().absolutePath
         listOf(
-            CategoryItem("Загрузки", Icons.Default.Download, NexusBluePrimary, "$root/Download"),
-            CategoryItem("Изображения", Icons.Default.Image, ImageColor, root, FileCategory.IMAGE),
-            CategoryItem("Видео", Icons.Default.Movie, VideoColor, root, FileCategory.VIDEO),
-            CategoryItem("Музыка", Icons.Default.MusicNote, AudioColor, root, FileCategory.AUDIO),
-            CategoryItem("Документы", Icons.Default.Description, DocumentColor, root, FileCategory.DOCUMENT),
-            CategoryItem("Архивы", Icons.Default.Archive, ArchiveColor, root, FileCategory.ARCHIVE)
+            CategoryItem(str(R.string.downloads), Icons.Default.Download, NexusBluePrimary, "$root/Download"),
+            CategoryItem(str(R.string.images), Icons.Default.Image, ImageColor, root, FileCategory.IMAGE),
+            CategoryItem(str(R.string.videos), Icons.Default.Movie, VideoColor, root, FileCategory.VIDEO),
+            CategoryItem(str(R.string.music), Icons.Default.MusicNote, AudioColor, root, FileCategory.AUDIO),
+            CategoryItem(str(R.string.documents), Icons.Default.Description, DocumentColor, root, FileCategory.DOCUMENT),
+            CategoryItem(str(R.string.archives), Icons.Default.Archive, ArchiveColor, root, FileCategory.ARCHIVE)
         )
     }
 
@@ -151,16 +152,16 @@ fun HomeScreen(
     deletingServer?.let { server ->
         AlertDialog(
             onDismissRequest = { deletingServer = null },
-            title = { Text("Удалить подключение?") },
-            text = { Text("«${server.name}» исчезнет из списка. Файлы на сервере не затрагиваются.") },
+            title = { Text(str(R.string.remove_connection)) },
+            text = { Text(str(R.string.will_be_removed_from_the_list_files_on_t, server.name)) },
             confirmButton = {
                 Button(onClick = {
                     viewModel.serverRepo.deleteServer(server.id)
                     deletingServer = null
-                }) { Text("Удалить") }
+                }) { Text(str(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingServer = null }) { Text("Отмена") }
+                TextButton(onClick = { deletingServer = null }) { Text(str(R.string.cancel)) }
             }
         )
     }
@@ -200,10 +201,10 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshDashboard() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                        Icon(Icons.Default.Refresh, contentDescription = str(R.string.update))
                     }
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        Icon(Icons.Default.Settings, contentDescription = str(R.string.settings))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -233,7 +234,7 @@ fun HomeScreen(
             // Storage Overview Section
             item {
                 Text(
-                    text = "Хранилища устройства",
+                    text = str(R.string.device_storage),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -258,7 +259,7 @@ fun HomeScreen(
             // Quick Categories Grid
             item {
                 Text(
-                    text = "Категории",
+                    text = str(R.string.categories),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -299,7 +300,7 @@ fun HomeScreen(
             // Quick Jumps
             item {
                 Text(
-                    text = "Быстрый переход",
+                    text = str(R.string.quick_access),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -349,7 +350,7 @@ fun HomeScreen(
             // Tools & Utilities
             item {
                 Text(
-                    text = "Инструменты и утилиты",
+                    text = str(R.string.tools),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -381,8 +382,8 @@ fun HomeScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Приложения", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
-                            Text("Бэкап APK", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(str(R.string.apps), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text(str(R.string.apk_backup), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -409,8 +410,8 @@ fun HomeScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Анализ диска", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
-                            Text("Топ файлов", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(str(R.string.storage_analysis_2), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text(str(R.string.largest_files), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -437,8 +438,8 @@ fun HomeScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Root Шелл", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
-                            Text("Консоль su", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(str(R.string.root_shell), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text(str(R.string.su_console), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -452,14 +453,14 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Сетевые хранилища",
+                        text = str(R.string.network_storage),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     IconButton(onClick = { showAddServerDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Добавить сервер",
+                            contentDescription = str(R.string.add_server),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -492,11 +493,11 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
                                 Text(
-                                    text = "Добавить сетевой диск",
+                                    text = str(R.string.add_a_network_drive),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "SFTP, qsh, Samba (Windows, NAS) или FTP",
+                                    text = str(R.string.sftp_qsh_samba_windows_nas_or_ftp),
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -558,12 +559,12 @@ fun RootStatusCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isGranted) "Root доступ активен" else "Режим пользователя",
+                        text = if (isGranted) str(R.string.root_access_granted) else str(R.string.user_mode),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = if (isGranted) RootColor else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isGranted) "Менеджер: ${rootInfo.rootImplementation} (${rootInfo.suVersion})" else "Root права не предоставлены или устройство не рутировано",
+                        text = if (isGranted) str(R.string.manager, rootInfo.rootImplementation, rootInfo.suVersion) else str(R.string.root_is_not_granted_or_the_device_is_not),
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -577,7 +578,7 @@ fun RootStatusCard(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Root проводник (/)")
+                    Text(str(R.string.root_explorer))
                 }
             }
         }
@@ -678,14 +679,14 @@ fun ServerCard(
             IconButton(onClick = onEdit) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = "Изменить",
+                    contentDescription = str(R.string.edit),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Удалить",
+                    contentDescription = str(R.string.delete),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                 )
             }

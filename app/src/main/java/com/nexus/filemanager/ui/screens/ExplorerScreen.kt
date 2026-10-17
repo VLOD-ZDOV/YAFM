@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -256,7 +258,7 @@ fun ExplorerScreen(
             onExtract = { dest ->
                 viewModel.extractArchive(item, dest) {
                     extractTarget = null
-                    Toast.makeText(context, "Распаковано в $dest", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, str(R.string.extracted_to, dest), Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -302,11 +304,11 @@ fun ExplorerScreen(
         val targets = deleteConfirmTargets
         AlertDialog(
             onDismissRequest = { deleteConfirmTargets = emptyList() },
-            title = { Text(if (targets.size == 1) "Удалить?" else "Удалить ${targets.size} объектов?") },
+            title = { Text(if (targets.size == 1) str(R.string.delete_2) else str(R.string.delete_items, targets.size)) },
             text = {
                 Text(
-                    if (targets.size == 1) "«${targets[0].name}» будет удалён без возможности восстановления."
-                    else "Выбранные объекты будут удалены без возможности восстановления."
+                    if (targets.size == 1) str(R.string.will_be_deleted_permanently, targets[0].name)
+                    else str(R.string.the_selected_items_will_be_deleted_perma)
                 )
             },
             confirmButton = {
@@ -317,12 +319,12 @@ fun ExplorerScreen(
                         deleteConfirmTargets = emptyList()
                     }
                 ) {
-                    Text("Удалить")
+                    Text(str(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deleteConfirmTargets = emptyList() }) {
-                    Text("Отмена")
+                    Text(str(R.string.cancel))
                 }
             }
         )
@@ -357,7 +359,7 @@ fun ExplorerScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
-                            placeholder = { Text("Поиск в этой папке...") },
+                            placeholder = { Text(str(R.string.search_this_folder)) },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -367,7 +369,7 @@ fun ExplorerScreen(
                                     isSearchActive = false
                                     viewModel.setSearchQuery("")
                                 }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Закрыть поиск")
+                                    Icon(Icons.Default.Close, contentDescription = str(R.string.close_search))
                                 }
                             }
                         )
@@ -381,7 +383,7 @@ fun ExplorerScreen(
                                 maxLines = 1
                             )
                             Text(
-                                text = "${fileList.size} объектов • ${storageType.name}",
+                                text = str(R.string.items, fileList.size, storageType.name),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                                 color = if (storageType == StorageType.ROOT) RootColor else MaterialTheme.colorScheme.primary
                             )
@@ -393,68 +395,68 @@ fun ExplorerScreen(
                         val handled = viewModel.navigateBack()
                         if (!handled) onNavigateBack()
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
                 actions = {
                     if (!isSearchActive) {
                         IconButton(onClick = { isSearchActive = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Поиск")
+                            Icon(Icons.Default.Search, contentDescription = str(R.string.search))
                         }
                     }
 
                     IconButton(onClick = { viewModel.toggleGridView() }) {
                         Icon(
                             imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                            contentDescription = "Сменить вид"
+                            contentDescription = str(R.string.change_view)
                         )
                     }
 
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
-                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Сортировка")
+                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = str(R.string.sort))
                         }
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("По имени (А-Я)") },
+                                text = { Text(str(R.string.name_a_z)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.NAME_ASC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("По имени (Я-А)") },
+                                text = { Text(str(R.string.name_z_a)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.NAME_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Сначала новые") },
+                                text = { Text(str(R.string.newest_first)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.DATE_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Сначала старые") },
+                                text = { Text(str(R.string.oldest_first)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.DATE_ASC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Сначала большие") },
+                                text = { Text(str(R.string.largest_first)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.SIZE_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Сначала маленькие") },
+                                text = { Text(str(R.string.smallest_first)) },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.SIZE_ASC)
                                     showSortMenu = false
@@ -465,21 +467,21 @@ fun ExplorerScreen(
 
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Меню")
+                            Icon(Icons.Default.MoreVert, contentDescription = str(R.string.menu))
                         }
                         DropdownMenu(
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text(if (showHidden) "Скрыть скрытые" else "Показать скрытые") },
+                                text = { Text(if (showHidden) str(R.string.hide_hidden_files) else str(R.string.show_hidden_files)) },
                                 onClick = {
                                     viewModel.toggleHiddenFiles()
                                     showMoreMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Обновить") },
+                                text = { Text(str(R.string.update)) },
                                 onClick = {
                                     viewModel.loadCurrentDirectory()
                                     showMoreMenu = false
@@ -509,7 +511,7 @@ fun ExplorerScreen(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
                                     modifier = Modifier.padding(end = 8.dp)
                                 ) {
-                                    Text("Создать файл", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
+                                    Text(str(R.string.new_file), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
                                 }
                                 FloatingActionButton(
                                     onClick = {
@@ -529,7 +531,7 @@ fun ExplorerScreen(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
                                     modifier = Modifier.padding(end = 8.dp)
                                 ) {
-                                    Text("Создать папку", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
+                                    Text(str(R.string.new_folder_2), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
                                 }
                                 FloatingActionButton(
                                     onClick = {
@@ -551,7 +553,7 @@ fun ExplorerScreen(
                     ) {
                         Icon(
                             imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                            contentDescription = "Действия"
+                            contentDescription = str(R.string.actions)
                         )
                     }
                 }
@@ -641,14 +643,14 @@ fun ExplorerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = errorMessage ?: "Ошибка",
+                            text = errorMessage ?: str(R.string.error_2),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(onClick = { viewModel.loadCurrentDirectory() }) {
-                            Text("Повторить попытку")
+                            Text(str(R.string.try_again))
                         }
                     }
                 } else if (fileList.isEmpty()) {
@@ -666,7 +668,7 @@ fun ExplorerScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (searchQuery.isNotEmpty()) "Ничего не найдено" else "Папка пуста",
+                            text = if (searchQuery.isNotEmpty()) str(R.string.nothing_found) else str(R.string.empty_folder),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -767,9 +769,9 @@ private fun openExternalIntent(context: Context, item: FileItem, file: File) {
             setDataAndType(uri, item.mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Открыть с помощью"))
+        context.startActivity(Intent.createChooser(intent, str(R.string.open_with)))
     } catch (e: Exception) {
-        Toast.makeText(context, "Не удалось открыть файл: ${e.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, str(R.string.could_not_open_the_file, e.message), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -778,21 +780,21 @@ private fun VideoChoiceDialog(onDismiss: () -> Unit, onChoose: (builtIn: Boolean
     var remember by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Открыть видео") },
+        title = { Text(str(R.string.open_video)) },
         text = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable { remember = !remember }
             ) {
                 Checkbox(checked = remember, onCheckedChange = { remember = it })
-                Text("Запомнить выбор (можно поменять в настройках)")
+                Text(str(R.string.remember_can_be_changed_in_settings))
             }
         },
         confirmButton = {
-            Button(onClick = { onChoose(true, remember) }) { Text("Встроенный плеер") }
+            Button(onClick = { onChoose(true, remember) }) { Text(str(R.string.built_in_player)) }
         },
         dismissButton = {
-            TextButton(onClick = { onChoose(false, remember) }) { Text("Другое приложение") }
+            TextButton(onClick = { onChoose(false, remember) }) { Text(str(R.string.another_app)) }
         }
     )
 }

@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,7 +51,7 @@ fun ExtractArchiveDialog(
     AlertDialog(
         onDismissRequest = { if (!isExtracting) onDismiss() },
         title = {
-            Text(if (isExtracting) "Извлечение архива..." else "Разархивировать")
+            Text(if (isExtracting) str(R.string.extracting) else str(R.string.extract_archive))
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -71,14 +73,14 @@ fun ExtractArchiveDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = progress?.currentFileName ?: "Подготовка...",
+                        text = progress?.currentFileName ?: str(R.string.preparing),
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Обработано файлов: ${progress?.processedCount ?: 0}",
+                        text = str(R.string.files_processed, progress?.processedCount ?: 0),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -86,7 +88,7 @@ fun ExtractArchiveDialog(
                     OutlinedTextField(
                         value = destPath,
                         onValueChange = { destPath = it },
-                        label = { Text("Папка назначения") },
+                        label = { Text(str(R.string.destination_folder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -96,14 +98,14 @@ fun ExtractArchiveDialog(
         confirmButton = {
             if (!isExtracting) {
                 Button(onClick = { onExtract(destPath) }) {
-                    Text("Извлечь")
+                    Text(str(R.string.extract))
                 }
             }
         },
         dismissButton = {
             if (!isExtracting) {
                 TextButton(onClick = onDismiss) {
-                    Text("Отмена")
+                    Text(str(R.string.cancel))
                 }
             }
         }
@@ -125,12 +127,12 @@ fun CompressDialog(
     AlertDialog(
         onDismissRequest = { if (!isCompressing) onDismiss() },
         title = {
-            Text(if (isCompressing) "Создание архива..." else "Создать архив")
+            Text(if (isCompressing) str(R.string.creating_archive) else str(R.string.create_archive))
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Выбрано объектов для сжатия: $selectedCount",
+                    text = str(R.string.items_to_compress, selectedCount),
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -146,7 +148,7 @@ fun CompressDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = progress?.currentFileName ?: "Архивация...",
+                        text = progress?.currentFileName ?: str(R.string.compressing),
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -156,7 +158,7 @@ fun CompressDialog(
                     OutlinedTextField(
                         value = baseName,
                         onValueChange = { baseName = it },
-                        label = { Text("Имя архива") },
+                        label = { Text(str(R.string.archive_name)) },
                         suffix = { Text(format.extension) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -176,14 +178,14 @@ fun CompressDialog(
                     onClick = { onCompress(baseName.trim().removeSuffix(format.extension) + format.extension, format) },
                     enabled = baseName.isNotBlank() && '/' !in baseName
                 ) {
-                    Text("Сжать")
+                    Text(str(R.string.compress))
                 }
             }
         },
         dismissButton = {
             if (!isCompressing) {
                 TextButton(onClick = onDismiss) {
-                    Text("Отмена")
+                    Text(str(R.string.cancel))
                 }
             }
         }

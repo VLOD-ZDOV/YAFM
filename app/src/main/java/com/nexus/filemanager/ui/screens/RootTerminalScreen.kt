@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -66,7 +68,7 @@ fun RootTerminalScreen(
     val terminalOutput = remember {
         mutableStateListOf(
             "YAFM Root Shell [v1.0]",
-            "Подключено к локальной консоли суперпользователя (su)",
+            str(R.string.connected_to_the_local_superuser_console),
             "------------------------------------------------"
         )
     }
@@ -113,17 +115,17 @@ fun RootTerminalScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Security, contentDescription = null, tint = RootColor)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Root Консоль", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                        Text(str(R.string.root_console), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { terminalOutput.clear() }) {
-                        Icon(Icons.Default.ClearAll, contentDescription = "Очистить")
+                        Icon(Icons.Default.ClearAll, contentDescription = str(R.string.clear))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -149,7 +151,7 @@ fun RootTerminalScreen(
                 FilterChip(
                     selected = false,
                     onClick = { runCmd("getenforce") },
-                    label = { Text("SELinux Статус") }
+                    label = { Text(str(R.string.selinux_status)) }
                 )
                 FilterChip(
                     selected = false,
@@ -164,17 +166,17 @@ fun RootTerminalScreen(
                 FilterChip(
                     selected = false,
                     onClick = { runCmd("df -h") },
-                    label = { Text("Разделы (df -h)") }
+                    label = { Text(str(R.string.partitions_df_h)) }
                 )
                 FilterChip(
                     selected = false,
                     onClick = { runCmd("uname -a") },
-                    label = { Text("Ядро (uname -a)") }
+                    label = { Text(str(R.string.kernel_uname_a)) }
                 )
                 FilterChip(
                     selected = false,
                     onClick = { runCmd("ls -la /data/adb/modules 2>/dev/null") },
-                    label = { Text("Magisk Модули") }
+                    label = { Text(str(R.string.magisk_modules)) }
                 )
                 FilterChip(
                     selected = false,
@@ -229,7 +231,7 @@ fun RootTerminalScreen(
                 OutlinedTextField(
                     value = inputCommand,
                     onValueChange = { inputCommand = it },
-                    placeholder = { Text("Введите команду...") },
+                    placeholder = { Text(str(R.string.enter_a_command)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp)
@@ -246,7 +248,7 @@ fun RootTerminalScreen(
                     } else {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Отправить",
+                            contentDescription = str(R.string.send),
                             tint = if (inputCommand.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

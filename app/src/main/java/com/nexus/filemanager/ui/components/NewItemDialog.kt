@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.components
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -24,14 +26,14 @@ fun NewItemDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (isFolder) "Создать папку" else "Создать файл")
+            Text(if (isFolder) str(R.string.new_folder_2) else str(R.string.new_file))
         },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Имя") },
-                placeholder = { Text(if (isFolder) "Новая папка" else "document.txt") },
+                label = { Text(str(R.string.name)) },
+                placeholder = { Text(if (isFolder) str(R.string.new_folder) else "document.txt") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -45,12 +47,12 @@ fun NewItemDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("Создать")
+                Text(str(R.string.create))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text(str(R.string.cancel))
             }
         }
     )
@@ -67,13 +69,13 @@ fun RenameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Переименовать")
+            Text(str(R.string.rename))
         },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Новое имя") },
+                label = { Text(str(R.string.new_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -87,12 +89,12 @@ fun RenameDialog(
                 },
                 enabled = name.isNotBlank() && name != currentName
             ) {
-                Text("Переименовать")
+                Text(str(R.string.rename))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text(str(R.string.cancel))
             }
         }
     )

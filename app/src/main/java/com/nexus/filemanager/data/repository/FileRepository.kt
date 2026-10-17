@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.repository
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import android.os.Environment
 import android.os.StatFs
@@ -57,9 +59,9 @@ class FileRepository(context: Context) {
         StorageType.LOCAL -> local
         StorageType.ROOT -> root
         else -> {
-            val id = serverId ?: throw IOException("Сервер не указан")
+            val id = serverId ?: throw IOException(str(R.string.no_server_given))
             remote.getOrPut(id) {
-                create(servers.getServer(id) ?: throw IOException("Сервер удалён"))
+                create(servers.getServer(id) ?: throw IOException(str(R.string.the_server_was_removed)))
             }
         }
     }
@@ -89,7 +91,7 @@ class FileRepository(context: Context) {
     }
 
     suspend fun readText(item: FileItem): String = io {
-        val tooBig = IOException("Файл больше ${MAX_TEXT_SIZE / 1024 / 1024} МБ, откройте его в другом приложении")
+        val tooBig = IOException(str(R.string.the_file_is_over_mb_open_it_in_another_a, MAX_TEXT_SIZE / 1024 / 1024))
         if (item.size > MAX_TEXT_SIZE) throw tooBig
         // The listed size comes from the server and may be wrong: the limit holds for what is actually read.
         val out = java.io.ByteArrayOutputStream()
@@ -128,7 +130,7 @@ class FileRepository(context: Context) {
 
     suspend fun changePermissions(item: FileItem, octal: String) = io {
         val mode = octal.takeIf { it.matches(Regex("[0-7]{3,4}")) }?.toInt(8)
-            ?: throw IOException("Неверные права: $octal")
+            ?: throw IOException(str(R.string.invalid_permissions, octal))
         fs(item).chmod(item.path, mode)
     }
 
@@ -151,7 +153,7 @@ class FileRepository(context: Context) {
             taken += name
             val target = joinPath(dest.path, name)
             if (sameFs && item.isDirectory && (target + "/").startsWith(item.path.trimEnd('/') + "/")) {
-                throw IOException("Нельзя скопировать папку ${item.name} внутрь самой себя")
+                throw IOException(str(R.string.folder_cannot_be_copied_into_itself, item.name))
             }
             when {
                 move && sameFs -> src.rename(item.path, target)
@@ -258,11 +260,11 @@ class FileRepository(context: Context) {
             runCatching {
                 val internal = Environment.getExternalStorageDirectory()
                 val st = StatFs(internal.path)
-                StorageStats("Основное хранилище", internal.absolutePath, st.totalBytes, st.availableBytes)
+                StorageStats(str(R.string.internal_storage), internal.absolutePath, st.totalBytes, st.availableBytes)
             }.getOrNull(),
             runCatching {
                 val st = StatFs("/")
-                StorageStats("Системный раздел (Root /)", "/", st.totalBytes, st.availableBytes, isRoot = true)
+                StorageStats(str(R.string.system_partition_root), "/", st.totalBytes, st.availableBytes, isRoot = true)
             }.getOrNull()
         )
     }
@@ -271,7 +273,7 @@ class FileRepository(context: Context) {
         name.isNotBlank() && name != "." && name != ".." && '/' !in name && '\\' !in name && '\u0000' !in name
 
     private fun checkName(name: String) {
-        if (!isSafeName(name)) throw IOException("Недопустимое имя: $name")
+        if (!isSafeName(name)) throw IOException(str(R.string.invalid_name, name))
     }
 
     private fun uniqueName(name: String, taken: Set<String>): String {

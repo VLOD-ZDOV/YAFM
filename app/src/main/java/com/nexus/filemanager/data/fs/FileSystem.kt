@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.fs
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import com.nexus.filemanager.data.model.FileItem
 import java.io.Closeable
 import java.io.InputStream
@@ -20,7 +22,7 @@ interface FileSystem : Closeable {
 
     fun createFile(path: String) = openWrite(path).close()
 
-    fun chmod(path: String, mode: Int): Unit = throw UnsupportedOperationException("Смена прав не поддерживается")
+    fun chmod(path: String, mode: Int): Unit = throw UnsupportedOperationException(str(R.string.changing_permissions_is_not_supported))
 
     /** Recursive delete that removes links themselves, never what they point to. */
     fun delete(item: FileItem) {

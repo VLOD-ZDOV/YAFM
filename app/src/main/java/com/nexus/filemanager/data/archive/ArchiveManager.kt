@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.archive
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.ArchiveEntry
@@ -160,11 +162,11 @@ object ArchiveManager {
                 compressed -> {
                     // A single compressed file: its name without the compression suffix.
                     val name = archive.name.substringBeforeLast('.').ifEmpty { "extracted" }
-                    val out = safeTarget(target, name) ?: throw IOException("Недопустимое имя: $name")
+                    val out = safeTarget(target, name) ?: throw IOException(str(R.string.invalid_name, name))
                     onProgress(Progress(name, 1, 1, 1f))
                     writeFile(input, out)
                 }
-                else -> throw IOException("Формат архива не распознан")
+                else -> throw IOException(str(R.string.unknown_archive_format))
             }
         } finally {
             input.close()
@@ -206,7 +208,7 @@ object ArchiveManager {
             if (file.isDirectory) file.listFiles()?.sortedBy { it.name }?.forEach { walk(it, "$name/${it.name}") }
         }
         sources.forEach { walk(it, it.name) }
-        if (all.any { it.first.canonicalPath == destination.canonicalPath }) throw IOException("Архив не может содержать сам себя")
+        if (all.any { it.first.canonicalPath == destination.canonicalPath }) throw IOException(str(R.string.an_archive_cannot_contain_itself))
 
         try {
             if (format == Format.SEVEN_Z) {

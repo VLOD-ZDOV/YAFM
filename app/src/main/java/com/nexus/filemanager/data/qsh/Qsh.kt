@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.qsh
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import android.content.Context
 import com.nexus.filemanager.data.model.ServerConfig
 import android.system.Os
@@ -46,8 +48,8 @@ class Qsh(context: Context) {
 
     /** user@host for qsh's command line; refuses anything qsh could read as an option or a pattern. */
     private fun destination(c: ServerConfig): String {
-        if (!USER.matches(c.username)) throw IOException("Недопустимое имя пользователя: ${c.username}")
-        if (!HOST.matches(c.host)) throw IOException("Недопустимый адрес сервера: ${c.host}")
+        if (!USER.matches(c.username)) throw IOException(str(R.string.invalid_user_name, c.username))
+        if (!HOST.matches(c.host)) throw IOException(str(R.string.invalid_server_address, c.host))
         return if (':' in c.host) "${c.username}@[${c.host}]" else "${c.username}@${c.host}"
     }
 
@@ -59,7 +61,7 @@ class Qsh(context: Context) {
 
     /** [answer]: given to qsh through SSH_ASKPASS when the server asks something (a one-time code). */
     private fun start(args: List<String>, answer: String? = null): Process {
-        if (!isAvailable) throw IOException("qsh не встроен в эту сборку (нет libqsh.so)")
+        if (!isAvailable) throw IOException(str(R.string.qsh_is_not_included_in_this_build_no_lib))
         return ProcessBuilder(listOf(binary.absolutePath) + args)
             .apply {
                 environment()["HOME"] = home.absolutePath
@@ -85,7 +87,7 @@ class Qsh(context: Context) {
     )
 
     /** The server wants an answer (a one-time code) that BatchMode does not let qsh ask for. */
-    class CodeRequired(val serverId: String, val prompt: String) : IOException("Сервер просит код: $prompt") {
+    class CodeRequired(val serverId: String, val prompt: String) : IOException(str(R.string.the_server_asks_for_a_code, prompt)) {
         companion object {
             const val MARKER = "prompting is disabled"
 
@@ -93,7 +95,7 @@ class Qsh(context: Context) {
             fun from(serverId: String, stderr: String): CodeRequired? {
                 if (MARKER !in stderr) return null
                 val prompt = Regex("asks \"([^\"]*)\"").find(stderr)?.groupValues?.get(1)?.trim()
-                return CodeRequired(serverId, prompt?.ifEmpty { null } ?: "Одноразовый код")
+                return CodeRequired(serverId, prompt?.ifEmpty { null } ?: str(R.string.one_time_code))
             }
         }
     }
@@ -121,10 +123,10 @@ class Qsh(context: Context) {
         val stdout = process.inputStream.bufferedReader().readText()
         if (!process.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
             process.destroyForcibly()
-            throw IOException("qsh: превышено время ожидания")
+            throw IOException(str(R.string.qsh_timed_out))
         }
         errThread.join(1000)
-        if (process.exitValue() != 0) throw IOException(stderr.toString().trim().ifEmpty { "qsh: код ${process.exitValue()}" })
+        if (process.exitValue() != 0) throw IOException(stderr.toString().trim().ifEmpty { str(R.string.qsh_exit_code, process.exitValue()) })
         return (stdout + stderr).trim()
     }
 }

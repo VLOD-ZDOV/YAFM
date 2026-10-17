@@ -1,5 +1,7 @@
 package com.nexus.filemanager.data.fs
 
+import com.nexus.filemanager.str
+import com.nexus.filemanager.R
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.ServerConfig
 import com.nexus.filemanager.data.model.StorageType
@@ -41,7 +43,7 @@ class QshFileSystem(
             p.destroy()
             val err = stderr.toString().trim()
             Qsh.CodeRequired.from(config.id, err)?.let { throw it }
-            throw IOException(err.ifEmpty { e.message ?: "qsh: не удалось подключиться" })
+            throw IOException(err.ifEmpty { e.message ?: str(R.string.qsh_could_not_connect) })
         }
         process = p
         return channel!!
