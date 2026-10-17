@@ -68,11 +68,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import com.nexus.filemanager.data.archive.ArchiveManager
 import com.nexus.filemanager.data.model.FileCategory
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.StorageType
 import com.nexus.filemanager.ui.components.ActionBottomBar
+import com.nexus.filemanager.ui.components.BatchRenameDialog
 import com.nexus.filemanager.ui.components.BreadcrumbBar
+import com.nexus.filemanager.ui.components.CompressDialog
+import com.nexus.filemanager.ui.components.ExtractArchiveDialog
 import com.nexus.filemanager.ui.components.FileDetailsDialog
 import com.nexus.filemanager.ui.components.FileGridItem
 import com.nexus.filemanager.ui.components.FileListItem
@@ -105,6 +109,8 @@ fun ExplorerScreen(
     val clipboardItems by viewModel.clipboardItems.collectAsState()
     val clipboardOp by viewModel.clipboardOp.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val archiveProgress by viewModel.archiveProgress.collectAsState()
+    val isArchiveProcessing by viewModel.isArchiveProcessing.collectAsState()
 
     var isSearchActive by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -114,6 +120,9 @@ fun ExplorerScreen(
     // Dialog States
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showNewFileDialog by remember { mutableStateOf(false) }
+    var showCompressDialog by remember { mutableStateOf(false) }
+    var showBatchRenameDialog by remember { mutableStateOf(false) }
+    var extractTarget by remember { mutableStateOf<FileItem?>(null) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
     var deleteConfirmTarget by remember { mutableStateOf<FileItem?>(null) }
     var permissionsTarget by remember { mutableStateOf<FileItem?>(null) }
@@ -154,6 +163,49 @@ fun ExplorerScreen(
             onConfirm = {
                 viewModel.createNewFile(it)
                 showNewFileDialog = false
+            }
+        )
+    }
+
+    extractTarget?.let { item ->
+        ExtractArchiveDialog(
+            archiveItem = item,
+            currentPath = currentPath,
+            progress = archiveProgress,
+            isExtracting = isArchiveProcessing,
+            onDismiss = { extractTarget = null },
+            onExtract = { dest ->
+                viewModel.extractArchive(item, dest) {
+                    extractTarget = null
+                    Toast.makeText(context, "Архив успешно распакован", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    if (showCompressDialog) {
+        CompressDialog(
+            selectedCount = selectedItems.size,
+            progress = archiveProgress,
+            isCompressing = isArchiveProcessing,
+            onDismiss = { showCompressDialog = false },
+            onCompress = { archiveName ->
+                viewModel.compressSelected(archiveName) {
+                    showCompressDialog = false
+                    Toast.makeText(context, "Архив успешно создан", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    if (showBatchRenameDialog) {
+        BatchRenameDialog(
+            items = selectedItems.toList(),
+            onDismiss = { showBatchRenameDialog = false },
+            onApply = { prefix, suffix, find, replace, addIndex ->
+                viewModel.batchRenameSelected(prefix, suffix, find, replace, addIndex)
+                showBatchRenameDialog = false
+                Toast.makeText(context, "Файлы переименованы", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -435,8 +487,11 @@ fun ExplorerScreen(
                     onCancel = { viewModel.clearClipboard() }
                 )
 
+                val hasArchive = selectedItems.any { ArchiveManager.isArchive(it.name) }
+
                 ActionBottomBar(
                     selectedCount = selectedItems.size,
+                    hasArchiveSelected = hasArchive,
                     onSelectAll = { viewModel.selectAll() },
                     onClearSelection = { viewModel.clearSelection() },
                     onCopy = { viewModel.copySelected() },
@@ -447,7 +502,19 @@ fun ExplorerScreen(
                     onPermissions = {
                         selectedItems.firstOrNull()?.let { permissionsTarget = it }
                     },
-                    canChangePermissions = storageType == StorageType.ROOT || storageType == StorageType.LOCAL
+                    canChangePermissions = storageType == StorageType.ROOT || storageType == StorageType.LOCAL,
+                    onExtract = {
+                        val archive = selectedItems.firstOrNull { ArchiveManager.isArchive(it.name) }
+                        if (archive != null) {
+                            extractTarget = archive
+                        }
+                    },
+                    onCompress = {
+                        showCompressDialog = true
+                    },
+                    onBatchRename = {
+                        showBatchRenameDialog = true
+                    }
                 )
             }
         }
@@ -533,6 +600,8 @@ fun ExplorerScreen(
                                             viewModel.toggleSelection(item)
                                         } else if (item.isDirectory) {
                                             viewModel.navigateTo(item.path)
+                                        } else if (ArchiveManager.isArchive(item.name)) {
+                                            extractTarget = item
                                         } else {
                                             handleFileClick(item, onOpenFileInEditor, onOpenImage, context)
                                         }
@@ -559,6 +628,8 @@ fun ExplorerScreen(
                                             viewModel.toggleSelection(item)
                                         } else if (item.isDirectory) {
                                             viewModel.navigateTo(item.path)
+                                        } else if (ArchiveManager.isArchive(item.name)) {
+                                            extractTarget = item
                                         } else {
                                             handleFileClick(item, onOpenFileInEditor, onOpenImage, context)
                                         }

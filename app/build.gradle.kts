@@ -73,6 +73,10 @@ dependencies {
     // Image previews
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Archives (ZIP, TAR, GZ, BZ2, XZ, 7Z)
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.tukaani:xz:1.10")
+
     // Network protocols
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("com.github.mwiede:jsch:0.2.18")

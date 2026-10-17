@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
@@ -34,9 +35,11 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -93,7 +96,10 @@ data class CategoryItem(
 @Composable
 fun HomeScreen(
     viewModel: FileExplorerViewModel,
-    onNavigateToExplorer: () -> Unit
+    onNavigateToExplorer: () -> Unit,
+    onNavigateToAppManager: () -> Unit,
+    onNavigateToStorageAnalyzer: () -> Unit,
+    onNavigateToRootTerminal: () -> Unit
 ) {
     val storageStats by viewModel.storageStats.collectAsState()
     val rootInfo by viewModel.rootInfo.collectAsState()
@@ -293,6 +299,104 @@ fun HomeScreen(
                         Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp), tint = RootColor)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("/data", fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // Tools & Utilities
+            item {
+                Text(
+                    text = "Инструменты и утилиты",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigateToAppManager() },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = ApkColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Apps, contentDescription = null, tint = ApkColor)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Приложения", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text("Бэкап APK", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigateToStorageAnalyzer() },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = NexusBluePrimary.copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.PieChart, contentDescription = null, tint = NexusBluePrimary)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Анализ диска", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text("Топ файлов", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigateToRootTerminal() },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = RootColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Terminal, contentDescription = null, tint = RootColor)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Root Шелл", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp))
+                            Text("Консоль su", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }

@@ -26,9 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.nexus.filemanager.data.model.FileItem
+import com.nexus.filemanager.ui.screens.AppManagerScreen
 import com.nexus.filemanager.ui.screens.ExplorerScreen
 import com.nexus.filemanager.ui.screens.HomeScreen
 import com.nexus.filemanager.ui.screens.ImageViewerScreen
+import com.nexus.filemanager.ui.screens.RootTerminalScreen
+import com.nexus.filemanager.ui.screens.StorageAnalyzerScreen
 import com.nexus.filemanager.ui.screens.TextEditorScreen
 import com.nexus.filemanager.ui.theme.NexusFileManagerTheme
 import com.nexus.filemanager.ui.viewmodel.FileExplorerViewModel
@@ -38,6 +41,9 @@ sealed class AppScreen {
     data object Explorer : AppScreen()
     data class TextEditor(val file: FileItem) : AppScreen()
     data class ImageViewer(val file: FileItem) : AppScreen()
+    data object AppManager : AppScreen()
+    data object StorageAnalyzer : AppScreen()
+    data object RootTerminal : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -119,6 +125,15 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     viewModel = viewModel,
                     onNavigateToExplorer = {
                         currentScreen = AppScreen.Explorer
+                    },
+                    onNavigateToAppManager = {
+                        currentScreen = AppScreen.AppManager
+                    },
+                    onNavigateToStorageAnalyzer = {
+                        currentScreen = AppScreen.StorageAnalyzer
+                    },
+                    onNavigateToRootTerminal = {
+                        currentScreen = AppScreen.RootTerminal
                     }
                 )
             }
@@ -149,6 +164,31 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     fileItem = screen.file,
                     onNavigateBack = {
                         currentScreen = AppScreen.Explorer
+                    }
+                )
+            }
+            is AppScreen.AppManager -> {
+                AppManagerScreen(
+                    isRootAvailable = viewModel.rootInfo.value.isRootGranted,
+                    onNavigateBack = {
+                        currentScreen = AppScreen.Home
+                    }
+                )
+            }
+            is AppScreen.StorageAnalyzer -> {
+                StorageAnalyzerScreen(
+                    onNavigateBack = {
+                        currentScreen = AppScreen.Home
+                    },
+                    onOpenFile = { file ->
+                        currentScreen = AppScreen.Explorer
+                    }
+                )
+            }
+            is AppScreen.RootTerminal -> {
+                RootTerminalScreen(
+                    onNavigateBack = {
+                        currentScreen = AppScreen.Home
                     }
                 )
             }

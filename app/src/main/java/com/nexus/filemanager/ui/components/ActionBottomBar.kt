@@ -39,9 +39,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexus.filemanager.ui.viewmodel.ClipboardOp
 
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Unarchive
+
 @Composable
 fun ActionBottomBar(
     selectedCount: Int,
+    hasArchiveSelected: Boolean = false,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
     onCopy: () -> Unit,
@@ -49,6 +55,9 @@ fun ActionBottomBar(
     onDelete: () -> Unit,
     onPermissions: () -> Unit,
     canChangePermissions: Boolean,
+    onExtract: () -> Unit = {},
+    onCompress: () -> Unit = {},
+    onBatchRename: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -98,6 +107,13 @@ fun ActionBottomBar(
                         .padding(top = 4.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
+                    if (hasArchiveSelected) {
+                        ActionButton(icon = Icons.Default.Unarchive, label = "Извлечь", onClick = onExtract)
+                    }
+                    ActionButton(icon = Icons.Default.FolderZip, label = "В ZIP", onClick = onCompress)
+                    if (selectedCount > 1) {
+                        ActionButton(icon = Icons.Default.DriveFileRenameOutline, label = "Пакетное", onClick = onBatchRename)
+                    }
                     ActionButton(icon = Icons.Default.ContentCopy, label = "Копировать", onClick = onCopy)
                     ActionButton(icon = Icons.Default.ContentCut, label = "Вырезать", onClick = onCut)
                     if (canChangePermissions) {

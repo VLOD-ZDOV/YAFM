@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.filemanager.data.archive.ArchiveManager
 import com.nexus.filemanager.data.model.FileItem
 import com.nexus.filemanager.data.model.RootInfo
 import com.nexus.filemanager.data.model.ServerConfig
@@ -349,6 +350,80 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             _isLoading.value = true
             RootCommander.remountPartition(partition, rw)
             _isLoading.value = false
+        }
+    }
+
+    // Archive Operations
+    private val _archiveProgress = MutableStateFlow<ArchiveManager.Progress?>(null)
+    val archiveProgress: StateFlow<ArchiveManager.Progress?> = _archiveProgress.asStateFlow()
+
+    private val _isArchiveProcessing = MutableStateFlow(false)
+    val isArchiveProcessing: StateFlow<Boolean> = _isArchiveProcessing.asStateFlow()
+
+    fun extractArchive(archiveItem: FileItem, targetDir: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _isArchiveProcessing.value = true
+            val src = File(archiveItem.path)
+            val dest = File(targetDir)
+            ArchiveManager.extractArchive(src, dest) { prog ->
+                _archiveProgress.value = prog
+            }
+            _isArchiveProcessing.value = false
+            _archiveProgress.value = null
+            loadCurrentDirectory()
+            onDone()
+        }
+    }
+
+    fun compressSelected(archiveName: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _isArchiveProcessing.value = true
+            val srcFiles = _selectedItems.value.map { File(it.path) }
+            val destFile = File(_currentPath.value, archiveName)
+            ArchiveManager.createZipArchive(srcFiles, destFile) { prog ->
+                _archiveProgress.value = prog
+            }
+            _isArchiveProcessing.value = false
+            _archiveProgress.value = null
+            clearSelection()
+            loadCurrentDirectory()
+            onDone()
+        }
+    }
+
+    fun batchRenameSelected(
+        prefix: String,
+        suffix: String,
+        find: String,
+        replace: String,
+        addIndex: Boolean
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val items = _selectedItems.value.toList()
+            items.forEachIndexed { i, item ->
+                val ext = if (item.isDirectory) "" else ".${item.extension}"
+                val base = if (item.isDirectory) item.name else item.name.substringBeforeLast('.')
+                var result = base
+                if (find.isNotEmpty()) {
+                    result = result.replace(find, replace)
+                }
+                if (prefix.isNotEmpty()) {
+                    result = "$prefix$result"
+                }
+                if (suffix.isNotEmpty()) {
+                    result = "$result$suffix"
+                }
+                if (addIndex) {
+                    result = "${result}_${i + 1}"
+                }
+                val newName = "$result$ext"
+                if (newName != item.name) {
+                    fileRepo.rename(item, newName, _currentServer.value)
+                }
+            }
+            clearSelection()
+            loadCurrentDirectory()
         }
     }
 }
