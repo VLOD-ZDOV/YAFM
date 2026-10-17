@@ -1,160 +1,56 @@
-# YAFM: Yet Another File Manager (Android)
+# YAFM: Yet Another File Manager
 
-Современный, красивый, функциональный и удобный файловый менеджер для Android на базе **Jetpack Compose** и **Material Design 3**.
+An Android file manager for phone storage, root and network servers, with a video and music player built in.
 
----
+[Русская версия](README.ru.md)
 
-## ✨ Ключевые возможности
+## Features
 
-### 🛡️ Полная поддержка Root (Root Explorer)
-* **Автоопределение Root**: Поддержка Magisk, KernelSU, APatch, SuperSU и стандартного su-шелла.
-* **Просмотр защищенных каталогов**: Навигация по разделам `/`, `/system`, `/data`, `/vendor`, `/apex`.
-* **Перемонтирование разделов**: Быстрое переключение Remount Read-Write (RW) / Read-Only (RO).
-* **Интерактивный редактор прав (`chmod`)**:
-  * Матрица прав доступа (Владелец / Группа / Остальные: Чтение, Запись, Выполнение).
-  * Динамический расчет восьмеричного кода (`0755`, `0644`, `0777`).
-  * Быстрые пресеты для безопасного и быстрого изменения прав.
-* **Смена владельца и группы (`chown`)**.
+### Files
+- Phone storage, and the whole file system with root (KernelSU, Magisk, APatch).
+- Copy and move between any storages: phone, root, SFTP, qsh, SMB, FTP. Names already taken get a “ (1)” suffix, nothing is overwritten.
+- Categories on the home screen list every image, video, song, document or archive in internal storage.
+- Thumbnails for images and videos, list and grid views, search, sorting, hidden files.
+- Batch rename, permissions (chmod), file properties with MD5 and SHA-256.
+- Links are never followed when deleting or copying folders: a link is removed, not what it points to.
 
----
+### Archives
+- Extracts by content, not by name: zip, 7z, tar, ar and cpio, compressed with gz, bz2, xz, lzma, zstd, lz4, snappy, Z or brotli, and single compressed files.
+- Creates zip, 7z, tar, tar.gz, tar.bz2, tar.xz, tar.zst and tar.lz4.
+- Files are only written inside the chosen folder; links and devices from an archive are skipped.
 
-### 📦 Мощный модуль архивации (Archive Engine)
-* **Распаковка любых форматов архивов**:
-  * `.zip`, `.7z` (Seven-Zip), `.tar`
-  * `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2`, `.tar.xz` / `.txz`
-  * `.gz`, `.bz2`, `.xz` (одиночные файлы)
-* **Создание архивов**:
-  * Пакетное сжатие любых папок и файлов в `.zip` с сохранением дерева каталогов.
-* **Интерактивные диалоги**:
-  * Окно разархивирования с выбором целевой папки и индикатором реального прогресса обработки файлов.
-  * Защита от Zip-Slip: файлы пишутся только внутрь выбранной папки, ссылки и устройства из архива пропускаются.
+### Players
+- Video: libVLC, so nearly any format plays (mkv with AC3/DTS, avi, wmv, flv...). Gestures for seeking, brightness and volume, audio track and subtitle choice, speed, frame modes, screen lock, resume, next/previous in the folder. Opening a video can ask whether to use it or another app.
+- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue.
 
----
+### Network storage
+- **SFTP** (SSH): one connection per server; the server key is remembered on first connect and a changed key is refused.
+- **qsh** (SSH over QUIC with TCP fallback): browse over the server's sftp subsystem, copy with `qsh cp`. Sign in with this phone's key by pairing with a code from `qshd pair`, or add the key shown in the settings to the server. One-time codes (2FA) are asked for when the server wants one.
+- **SMB** 2/3 (Windows shares, NAS) and **FTP** (unencrypted, for trusted networks).
+- Saved passwords are encrypted with a key from the Android Keystore.
 
-### 📱 Менеджер установленных приложений (App Manager)
-* **Просмотр всех установленных приложений**: фильтрация по Пользовательским и Системным.
-* **Резервное копирование (APK Export)**: извлечение чистого APK любого приложения в папку `/sdcard/Download/ApkBackups/`.
-* **Root-удаление и заморозка bloatware**: удаление или отключение системных и предустановленных приложений на рутированных устройствах.
-* **Быстрый запуск** и переход в системные настройки программы.
+### Other
+- App manager with APK backup, storage analysis by type, root shell, text editor.
+- Themes: system, light, dark and AMOLED black, with wallpaper colors.
+- Updates from GitHub releases, checked at startup (can be turned off).
+- English and Russian.
 
----
+## Building
 
-### 📊 Анализ диска и поиск тяжелых файлов (Storage Analyzer)
-* **Диаграмма распределения**: объем занятого места по типам (Видео, Изображения, Аудио, Архивы, APK, Документы).
-* **Топ-50 самых больших файлов**: мгновенный поиск тяжелых файлов (кэши, большие видео, забытые архивы) с возможностью перехода к ним.
-
----
-
-### 💻 Интерактивная Root-консоль (Root Terminal)
-* Полноценный встроенный терминал с правами суперпользователя (`su`).
-* Быстрые команды в один клик:
-  * Проверка и переключение режима SELinux (`SELinux Permissive` / `SELinux Enforcing`).
-  * Просмотр таблицы монтирования дисков (`df -h`).
-  * Список модулей Magisk / KernelSU (`ls /data/adb/modules`).
-  * Сведения о ядре (`uname -a`) и версии Android.
-
----
-
-### ✏️ Пакетное переименование (Batch Rename)
-* Быстрое массовое переименование десятков файлов по шаблону:
-  * Добавление префикса и суффикса.
-  * Поиск и замена фрагментов в именах.
-  * Автонумерация (`_1`, `_2`, `_3`).
-  * Живой предпросмотр результата до применения.
-
----
-
-### 🌐 Сетевые хранилища (SFTP, qsh, SMB, FTP)
-* **Samba (SMB 2.0 / 3.0 / 3.1.1)**:
-  * Подключение к сетевым дискам Windows, Linux Samba, домашним NAS (Synology, QNAP, TrueNAS).
-  * Поддержка защищенных и анонимных гостевых учетных записей.
-* **SFTP / SSHFS (SSH File Transfer Protocol)**:
-  * Подключение к серверам Linux, macOS, Unix и маршрутизаторам по SSH/SFTP на порту 22 (или произвольном).
-  * Современное шифрование (Ed25519, Curve25519, RSA-SHA2).
-  * Ключ сервера запоминается при первом входе; если он изменится, подключение отклоняется.
-  * Возможность удаленного управления файлами и изменения прав.
-* **qsh (SSH поверх QUIC)**:
-  * Просмотр и правка файлов на сервере с qshd через встроенный SFTP (`qsh -s sftp`), с автоматическим переходом на TCP, если UDP закрыт.
-  * Копирование между телефоном и сервером идёт через `qsh cp` (быстрее SFTP).
-  * Вход по ключу телефона: на сервере `qshd pair`, код вводится в окне подключения.
-* **FTP** (без шифрования, только для доверенной сети):
-  * Классический протокол передачи файлов с поддержкой пассивного режима (Passive Mode).
-* **Копирование и перемещение между любыми хранилищами** (телефон, root, серверы); занятые имена получают суффикс « (1)».
-* **Одно соединение на сервер** на всё время работы, а не новое на каждое действие.
-* **Пароли** хранятся зашифрованными ключом из Android Keystore.
-* **Символические ссылки** не раскрываются при удалении и копировании папок: удаляется сама ссылка, а не то, на что она указывает.
-* **Встроенный менеджер подключений**:
-  * Сохранение серверов с удобными карточками на главном экране.
-  * Интерактивная кнопка **«Проверить связь»** прямо в окне добавления сервера.
-
----
-
-### 🎨 Современный и удобный интерфейс (Material You / M3)
-* **Главный экран (Dashboard)**:
-  * Информативные шкалы занятого и свободного места на устройстве и системном разделе (Root).
-  * Быстрый доступ к категориям: Загрузки, Изображения, Видео, Музыка, Документы, Архивы.
-  * Быстрые переходы в один клик: `/sdcard`, `/system`, `/data`.
-* **Навигация**:
-  * Плавная интерактивная строка крошек (Breadcrumbs) с возможностью быстрого перехода в любую родительскую папку.
-  * Кнопки «Домой», «Назад» и поддержка жеста возврата Android.
-* **Режимы отображения**:
-  * Переключение между детальным списком (размер, дата, права доступа) и сеткой (Grid View).
-  * Цветовая дифференциация типов файлов (APK, архивы, изображения, скрипты, видео).
-* **Поиск и сортировка**:
-  * Мгновенный поиск файлов в текущем каталоге.
-  * Сортировка: по имени (А-Я / Я-А), по дате изменения (новые/старые), по размеру (большие/маленькие).
-  * Переключатель показа скрытых файлов (`.nomedia`, `.thumbnails` и т.д.).
-* **Пакетные операции и буфер обмена**:
-  * Режим множественного выбора по долгому нажатию.
-  * Плавающая панель операций (Копировать, Вырезать, Удалить, Права, Выбрать все).
-  * Всплывающий бар вставки («Вставить N объектов» / «Отмена»).
-
----
-
-### 📝 Встроенные редакторы и утилиты
-* **Текстовый и программный редактор (Code & Text Editor)**:
-  * Номера строк, моноширинный шрифт, регулировка размера текста.
-  * Поддержка чтения и редактирования `.txt`, `.json`, `.xml`, `.prop`, `.sh`, `.conf`, `.py`.
-  * **Root-эскалация при сохранении**: редактирование системных файлов (например, `/system/build.prop`, `/system/etc/hosts`) с сохранением под правами суперпользователя.
-* **Просмотр изображений**: Быстрый встроенный вьюер фотографий и картинок.
-* **Инспектор свойств и калькулятор хешей**: Вычисление контрольной суммы MD5 (в том числе для файлов на серверах).
-
----
-
-## 🛠️ Стек технологий
-* **Язык**: Kotlin 2.0.21
-* **UI**: Jetpack Compose + Material 3 (Material You)
-* **Сетевые клиенты**:
-  * SMBJ (`com.hierynomus:smbj:0.13.0`) — SMB2 / SMB3
-  * JSch Modern (`com.github.mwiede:jsch:0.2.18`) — SFTP / SSH
-  * qsh — свой клиент SFTP v3 поверх `qsh -s sftp`, бинарник qsh лежит в APK как `libqsh.so`
-  * Apache Commons Net (`commons-net:commons-net:3.10.0`) — FTP
-  * Coil (`io.coil-kt:coil-compose:2.7.0`) — загрузка и предпросмотр медиа
-* **Сборка**: Android Gradle Plugin 8.7.3, Gradle 8.14.3, Target SDK 35 (Android 15), Min SDK 26 (Android 8.0+).
-
----
-
-## 📦 Сборка и установка APK
-
-### Готовый собранный APK:
-```
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-### Команда сборки:
 ```bash
-# один раз: положить клиент qsh в APK (архив qsh-aarch64-android.tar.gz из релизов qsh)
-scripts/fetch-qsh.sh <URL или путь к qsh-aarch64-android.tar.gz>
+# once: put the qsh client into the APK (the qsh-aarch64-android.tar.gz asset of a qsh release)
+scripts/fetch-qsh.sh <URL or path of qsh-aarch64-android.tar.gz>
 ./gradlew assembleDebug
 ```
-Без `libqsh.so` приложение собирается и работает, но подключения qsh недоступны. Сборка только под arm64-v8a.
 
-### Тесты:
+Without `libqsh.so` the app builds and works, only qsh connections are unavailable. The build is for arm64-v8a only.
+
+Release builds are signed when `YAFM_STORE_FILE`, `YAFM_STORE_PASSWORD` and `YAFM_KEY_ALIAS` are set in `~/.gradle/gradle.properties`.
+
 ```bash
-./gradlew :app:testDebugUnitTest   # SFTP-клиент против sftp-server из OpenSSH (или SFTP_TEST_CMD)
+./gradlew :app:testDebugUnitTest   # SFTP client, archives, local delete, version checks
 ```
 
-### Установка на подключенное Android устройство / эмулятор:
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
+## Requirements
+
+Android 8.0 or newer, arm64.
