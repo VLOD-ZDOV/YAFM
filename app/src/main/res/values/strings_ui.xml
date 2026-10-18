@@ -278,7 +278,7 @@
     <string name="this_build_has_no_qsh_libqsh_so_the_conn">This build has no qsh (libqsh.so). The connection can be saved but not opened.</string>
     <string name="this_is_the_latest_version">This is the latest version</string>
     <string name="this_phone_s_qsh_key">This phone\'s qsh key</string>
-    <string name="to_zip">To ZIP</string>
+    <string name="to_zip">Archive</string>
     <string name="too_many_files_in_the_folder">Too many files in the folder</string>
     <string name="tools">Tools</string>
     <string name="total_shown">Total: %1$s • Shown: %2$s</string>
@@ -307,4 +307,7 @@
     <string name="language">Language</string>
     <string name="choose_app_language">Choose the app language</string>
     <string name="refresh">Refresh</string>
+    <string name="seek_step">Seek step</string>
+    <string name="seconds_n">%1$s s</string>
+    <string name="video_side_gestures">Brightness and volume swipes at the screen edges</string>
 </resources>

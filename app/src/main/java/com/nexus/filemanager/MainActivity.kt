@@ -15,6 +15,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
+import com.nexus.filemanager.ui.components.MiniPlayer
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -52,7 +59,7 @@ sealed class AppScreen {
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
     data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
-    data class AudioPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
+    data class AudioPlayer(val file: java.io.File, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -133,6 +140,14 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
     UpdateDialog(viewModel)
     CodeDialog(viewModel)
 
+    // Music playing in the background gets a bar under the browsing screens.
+    val showMini = currentScreen is AppScreen.Home || currentScreen is AppScreen.Explorer
+    Column(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .weight(1f)
+            .then(if (showMini) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier)
+    ) {
     Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
         when (screen) {
             is AppScreen.Home -> {
@@ -212,10 +227,17 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                 )
             }
             is AppScreen.VideoPlayer -> {
-                VideoPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = AppScreen.Explorer })
+                val s = viewModel.settings.settings.value
+                VideoPlayerScreen(
+                    file = screen.file,
+                    playlist = screen.playlist,
+                    seekStepMs = s.seekSeconds * 1000L,
+                    sideGestures = s.videoSideGestures,
+                    onNavigateBack = { currentScreen = AppScreen.Explorer }
+                )
             }
             is AppScreen.AudioPlayer -> {
-                AudioPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = AppScreen.Explorer })
+                AudioPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = screen.back })
             }
             is AppScreen.Settings -> {
                 SettingsScreen(viewModel = viewModel, onNavigateBack = { currentScreen = AppScreen.Home })
@@ -228,5 +250,13 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                 )
             }
         }
+    }
+    }
+    if (showMini) {
+        MiniPlayer(
+            onOpen = { file, queue -> currentScreen = AppScreen.AudioPlayer(file, queue, back = currentScreen) },
+            modifier = Modifier.navigationBarsPadding()
+        )
+    }
     }
 }

@@ -49,7 +49,7 @@ data class FileItem(
                 "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "3gp", "ts" -> FileCategory.VIDEO
                 "mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma" -> FileCategory.AUDIO
                 "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp" -> FileCategory.DOCUMENT
-                "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz" -> FileCategory.ARCHIVE
+                "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz", "zst", "tzst", "lz4", "tlz4", "lzma", "br", "cpio" -> FileCategory.ARCHIVE
                 "apk", "xapk", "apks" -> FileCategory.APK
                 "kt", "java", "py", "c", "cpp", "h", "rs", "go", "js", "ts", "html", "css", "json", "xml", "yaml", "yml", "sh", "prop", "rc", "conf", "toml" -> FileCategory.CODE
                 "txt", "md", "log", "cfg", "ini" -> FileCategory.TEXT

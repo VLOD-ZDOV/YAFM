@@ -16,7 +16,11 @@ data class Settings(
     val videoPlayer: VideoPlayer = VideoPlayer.ASK,
     val autoUpdate: Boolean = true,
     val showHidden: Boolean = false,
-    val gridView: Boolean = false
+    val gridView: Boolean = false,
+    /** Seek buttons and double taps in the video player, in seconds. */
+    val seekSeconds: Int = 10,
+    /** Brightness (left) and volume (right) swipes in the video player. */
+    val videoSideGestures: Boolean = false
 )
 
 class SettingsRepository(context: Context) {
@@ -31,7 +35,9 @@ class SettingsRepository(context: Context) {
         videoPlayer = enumOr(prefs.getString("videoPlayer", null), VideoPlayer.ASK),
         autoUpdate = prefs.getBoolean("autoUpdate", true),
         showHidden = prefs.getBoolean("showHidden", false),
-        gridView = prefs.getBoolean("gridView", false)
+        gridView = prefs.getBoolean("gridView", false),
+        seekSeconds = prefs.getInt("seekSeconds", 10),
+        videoSideGestures = prefs.getBoolean("videoSideGestures", false)
     )
 
     private inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
@@ -47,6 +53,8 @@ class SettingsRepository(context: Context) {
             .putBoolean("autoUpdate", s.autoUpdate)
             .putBoolean("showHidden", s.showHidden)
             .putBoolean("gridView", s.gridView)
+            .putInt("seekSeconds", s.seekSeconds)
+            .putBoolean("videoSideGestures", s.videoSideGestures)
             .apply()
     }
 }

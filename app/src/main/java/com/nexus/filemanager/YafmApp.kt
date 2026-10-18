@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import com.nexus.filemanager.ui.thumbs.AudioCoverFetcher
 import com.nexus.filemanager.data.repository.FileRepository
 import com.nexus.filemanager.data.settings.SettingsRepository
 
@@ -33,7 +34,10 @@ class YafmApp : Application(), ImageLoaderFactory {
 
     // Video frames as thumbnails, next to Coil's image decoders.
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .components { add(VideoFrameDecoder.Factory()) }
+        .components {
+            add(VideoFrameDecoder.Factory())
+            add(AudioCoverFetcher.Factory())
+        }
         .crossfade(true)
         .build()
 }

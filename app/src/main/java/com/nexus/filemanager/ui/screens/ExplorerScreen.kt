@@ -172,8 +172,8 @@ fun ExplorerScreen(
     fun playBuiltIn(item: FileItem) {
         viewModel.withLocalCopy(item) { file ->
             // Next/previous: the other videos of the same local folder.
-            val playlist = if (item.storageType == StorageType.LOCAL) {
-                fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }
+            val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
+                fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
             } else listOf(file)
             onOpenVideo(file, playlist)
         }
@@ -181,8 +181,8 @@ fun ExplorerScreen(
 
     fun playAudio(item: FileItem) {
         viewModel.withLocalCopy(item) { file ->
-            val playlist = if (item.storageType == StorageType.LOCAL) {
-                fileList.filter { it.category == FileCategory.AUDIO }.map { java.io.File(it.path) }
+            val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
+                fileList.filter { it.category == FileCategory.AUDIO }.map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
             } else listOf(file)
             onOpenAudio(file, playlist)
         }

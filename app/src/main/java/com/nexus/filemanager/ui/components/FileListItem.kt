@@ -3,6 +3,7 @@ package com.nexus.filemanager.ui.components
 import com.nexus.filemanager.str
 import com.nexus.filemanager.R
 import java.io.File
+import com.nexus.filemanager.ui.thumbs.AudioCover
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
@@ -216,7 +217,7 @@ fun FileListItem(
 }
 
 @Composable
-fun FileIcon(item: FileItem, modifier: Modifier = Modifier) {
+fun FileIcon(item: FileItem, modifier: Modifier = Modifier, fill: Boolean = false) {
     val (icon, tint) = when (item.category) {
         FileCategory.FOLDER -> Pair(Icons.Default.Folder, FolderColor)
         FileCategory.IMAGE -> Pair(Icons.Default.Image, ImageColor)
@@ -231,25 +232,26 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier) {
     }
 
     // Previews only for files the app can read directly; remote and root files keep the icon.
-    val preview = item.storageType == StorageType.LOCAL &&
-        (item.category == FileCategory.IMAGE || item.category == FileCategory.VIDEO)
+    val preview = (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) &&
+        (item.category == FileCategory.IMAGE || item.category == FileCategory.VIDEO || item.category == FileCategory.AUDIO)
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = tint.copy(alpha = 0.15f),
-        modifier = modifier.size(40.dp)
+        // fill: the caller sizes it (grid tiles); otherwise a list row's 40 dp square.
+        modifier = if (fill) modifier else modifier.size(40.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(if (fill) 48.dp else 24.dp)
             )
             if (preview) {
                 val context = LocalContext.current
                 val request = remember(item.path, item.lastModified) {
                     ImageRequest.Builder(context)
-                        .data(File(item.path))
+                        .data(if (item.category == FileCategory.AUDIO) AudioCover(item.path) else File(item.path))
                         .size(256)
                         .videoFrameMillis(1000)
                         .memoryCacheKey("thumb:${item.path}:${item.lastModified}")

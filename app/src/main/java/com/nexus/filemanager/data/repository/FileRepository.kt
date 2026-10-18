@@ -187,7 +187,9 @@ class FileRepository(context: Context) {
 
     /** A local file for viewers, archives and other apps: the file itself, or a copy in the cache. */
     suspend fun materialize(item: FileItem): File = io {
-        if (item.storageType == StorageType.LOCAL && File(item.path).canRead()) return@io File(item.path)
+        // Files the app can read itself (also root-mode ones in shared storage) need no copy.
+        val direct = item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT
+        if (direct && File(item.path).canRead()) return@io File(item.path)
         val dir = File(openCache, (item.storageType.name + item.serverId + item.path).hashCode().toUInt().toString())
         dir.mkdirs()
         checkName(item.name)

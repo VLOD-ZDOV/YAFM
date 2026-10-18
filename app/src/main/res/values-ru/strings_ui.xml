@@ -278,7 +278,7 @@
     <string name="this_build_has_no_qsh_libqsh_so_the_conn">В этой сборке нет qsh (libqsh.so). Подключение можно сохранить, но открыть не получится.</string>
     <string name="this_is_the_latest_version">Это последняя версия</string>
     <string name="this_phone_s_qsh_key">Ключ qsh этого телефона</string>
-    <string name="to_zip">В ZIP</string>
+    <string name="to_zip">В архив</string>
     <string name="too_many_files_in_the_folder">Слишком много файлов в папке</string>
     <string name="tools">Инструменты и утилиты</string>
     <string name="total_shown">Всего: %1$s • Отобрано: %2$s</string>
@@ -307,4 +307,7 @@
     <string name="language">Язык</string>
     <string name="choose_app_language">Выбрать язык приложения</string>
     <string name="refresh">Обновить</string>
+    <string name="seek_step">Шаг перемотки</string>
+    <string name="seconds_n">%1$s с</string>
+    <string name="video_side_gestures">Яркость и громкость свайпами по краям экрана</string>
 </resources>

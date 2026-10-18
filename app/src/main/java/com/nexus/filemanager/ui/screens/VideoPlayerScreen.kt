@@ -42,6 +42,14 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Replay5
+import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -98,6 +106,8 @@ private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 fun VideoPlayerScreen(
     file: File,
     playlist: List<File>,
+    seekStepMs: Long,
+    sideGestures: Boolean,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -165,6 +175,8 @@ fun VideoPlayerScreen(
         } else {
             player.setTime(target)
         }
+        // Paused, libVLC sends no time events: the bar would stay where it was.
+        time = target
         touch()
     }
 
@@ -244,8 +256,10 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Back unlocks a locked screen instead of leaving, so the lock never traps the user.
     BackHandler {
         if (locked) {
+            locked = false
             controls = true
             touch()
         } else {
@@ -273,12 +287,13 @@ fun VideoPlayerScreen(
                         },
                         onDoubleTap = { offset ->
                             if (locked) return@detectTapGestures
+                            val seconds = seekStepMs / 1000
                             if (offset.x < size.width / 2) {
-                                seekBy(-10_000)
-                                hint = str(R.string.s_10_s_2)
+                                seekBy(-seekStepMs)
+                                hint = "−$seconds s"
                             } else {
-                                seekBy(10_000)
-                                hint = str(R.string.s_10_s)
+                                seekBy(seekStepMs)
+                                hint = "+$seconds s"
                             }
                         }
                     )
@@ -294,7 +309,12 @@ fun VideoPlayerScreen(
                             accX = 0f
                             accY = 0f
                             startTime = player.time
-                            if (start.x < size.width / 2) mode = -2 else mode = -3
+                            // Brightness and volume swipes only when turned on in the settings.
+                            mode = when {
+                                !sideGestures -> -1
+                                start.x < size.width / 2 -> -2
+                                else -> -3
+                            }
                         },
                         onDragEnd = {
                             seekDrag?.let { seekTo(it.toLong()) }
@@ -305,7 +325,7 @@ fun VideoPlayerScreen(
                             accX += drag.x
                             accY += drag.y
                             if (mode < 0 && (abs(accX) > 24 || abs(accY) > 24)) {
-                                mode = if (abs(accX) > abs(accY)) 1 else -mode
+                                mode = if (abs(accX) > abs(accY)) 1 else if (mode == -1) 0 else -mode
                             }
                             when (mode) {
                                 1 -> {
@@ -350,8 +370,14 @@ fun VideoPlayerScreen(
         AnimatedVisibility(visible = controls, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
             if (locked) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    IconButton(onClick = { locked = false; touch() }, modifier = Modifier.align(Alignment.CenterStart).padding(16.dp)) {
-                        Icon(Icons.Default.Lock, contentDescription = str(R.string.unlock), tint = Color.White)
+                    Button(
+                        onClick = { locked = false; touch() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.6f), contentColor = Color.White),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)
+                    ) {
+                        Icon(Icons.Default.Lock, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(str(R.string.unlock))
                     }
                 }
                 return@AnimatedVisibility
@@ -450,8 +476,8 @@ fun VideoPlayerScreen(
                     IconButton(onClick = { playlist.getOrNull(index - 1)?.let { open(it) }; touch() }, enabled = index > 0) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous_2), tint = Color.White, modifier = Modifier.size(32.dp))
                     }
-                    IconButton(onClick = { seekBy(-10_000) }) {
-                        Icon(Icons.Default.Replay10, contentDescription = str(R.string.s_10_s_2), tint = Color.White, modifier = Modifier.size(36.dp))
+                    IconButton(onClick = { seekBy(-seekStepMs) }) {
+                        Icon(replayIcon(seekStepMs), contentDescription = str(R.string.s_10_s_2), tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(
                         onClick = {
@@ -469,8 +495,8 @@ fun VideoPlayerScreen(
                             modifier = Modifier.size(56.dp)
                         )
                     }
-                    IconButton(onClick = { seekBy(10_000) }) {
-                        Icon(Icons.Default.Forward10, contentDescription = str(R.string.s_10_s), tint = Color.White, modifier = Modifier.size(36.dp))
+                    IconButton(onClick = { seekBy(seekStepMs) }) {
+                        Icon(forwardIcon(seekStepMs), contentDescription = str(R.string.s_10_s), tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(
                         onClick = { playlist.getOrNull(index + 1)?.let { open(it) }; touch() },
@@ -506,4 +532,18 @@ private fun formatTime(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) String.format(Locale.US, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
     else String.format(Locale.US, "%d:%02d", s / 60, s % 60)
+}
+
+private fun replayIcon(step: Long) = when (step) {
+    5_000L -> Icons.Default.Replay5
+    10_000L -> Icons.Default.Replay10
+    30_000L -> Icons.Default.Replay30
+    else -> Icons.Default.FastRewind
+}
+
+private fun forwardIcon(step: Long) = when (step) {
+    5_000L -> Icons.Default.Forward5
+    10_000L -> Icons.Default.Forward10
+    30_000L -> Icons.Default.Forward30
+    else -> Icons.Default.FastForward
 }

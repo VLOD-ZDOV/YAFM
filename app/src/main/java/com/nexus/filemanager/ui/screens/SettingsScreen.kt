@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -123,6 +124,20 @@ fun SettingsScreen(
                 VideoPlayer.SYSTEM to str(R.string.in_another_app)
             ).forEach { (choice, label) ->
                 Choice(label, settings.videoPlayer == choice) { viewModel.settings.update { it.copy(videoPlayer = choice) } }
+            }
+
+            Section(str(R.string.seek_step))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(5, 10, 15, 30).forEach { sec ->
+                    FilterChip(
+                        selected = settings.seekSeconds == sec,
+                        onClick = { viewModel.settings.update { it.copy(seekSeconds = sec) } },
+                        label = { Text(str(R.string.seconds_n, sec)) }
+                    )
+                }
+            }
+            Toggle(str(R.string.video_side_gestures), settings.videoSideGestures) { on ->
+                viewModel.settings.update { it.copy(videoSideGestures = on) }
             }
 
             Section(str(R.string.this_phone_s_qsh_key))

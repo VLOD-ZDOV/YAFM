@@ -72,14 +72,19 @@ fun FileGridItem(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp),
+                    .padding(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.weight(1f))
+                // The preview (or icon) takes the tile; the name goes underneath.
+                FileIcon(
+                    item = item,
+                    fill = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
 
-                FileIcon(item = item, modifier = Modifier.size(48.dp))
-
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = item.name,
@@ -100,8 +105,6 @@ fun FileGridItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
