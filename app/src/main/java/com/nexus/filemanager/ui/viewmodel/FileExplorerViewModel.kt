@@ -540,6 +540,18 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
+        /**
+         * Files of a category grouped by folder (shown relative to [root]), folders in name order,
+         * each keeping the files' order.
+         */
+        fun groupByFolder(items: List<FileItem>, root: String): List<Pair<String?, List<FileItem>>> =
+            items.groupBy { it.path.substringBeforeLast('/', "") }
+                .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+                .map { (dir, group) ->
+                    val shown = dir.removePrefix(root).trimStart('/').ifEmpty { "/" }
+                    shown to group
+                }
+
         fun batchName(item: FileItem, index: Int, prefix: String, suffix: String, find: String, replace: String, addIndex: Boolean): String {
             val hasExt = !item.isDirectory && item.extension.isNotEmpty()
             val base = if (hasExt) item.name.substringBeforeLast('.') else item.name

@@ -60,6 +60,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Checkbox
 import com.nexus.filemanager.data.settings.VideoPlayer
@@ -674,6 +677,21 @@ fun ExplorerScreen(
                         )
                     }
                 } else {
+                    fun onItemClick(item: FileItem) {
+                        when {
+                            isSelectionMode -> viewModel.toggleSelection(item)
+                            item.isDirectory -> viewModel.navigateTo(item.path)
+                            ArchiveManager.isArchive(item.name) -> extractTarget = item
+                            item.category == FileCategory.VIDEO -> openVideo(item)
+                            item.category == FileCategory.AUDIO -> playAudio(item)
+                            else -> handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+                        }
+                    }
+                    // A category gathers files from many folders: they come grouped, each under its folder.
+                    val sections = remember(fileList, location) {
+                        if (location.category != null) FileExplorerViewModel.groupByFolder(fileList, location.path)
+                        else listOf(null to fileList)
+                    }
                     if (isGridView) {
                         LazyVerticalGrid(
                             state = gridState,
@@ -683,27 +701,19 @@ fun ExplorerScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(fileList, key = { it.path }) { item ->
-                                val isSelected = selectedItems.contains(item)
-                                FileGridItem(
-                                    item = item,
-                                    isSelected = isSelected,
-                                    isSelectionMode = isSelectionMode,
-                                    onClick = {
-                                        if (isSelectionMode) {
-                                            viewModel.toggleSelection(item)
-                                        } else if (item.isDirectory) {
-                                            viewModel.navigateTo(item.path)
-                                        } else if (ArchiveManager.isArchive(item.name)) {
-                                            extractTarget = item
-                                        } else {
-                                            if (item.category == FileCategory.VIDEO) openVideo(item) else if (item.category == FileCategory.AUDIO) playAudio(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        viewModel.toggleSelection(item)
-                                    }
-                                )
+                            sections.forEach { (folder, group) ->
+                                if (folder != null) {
+                                    item(key = "folder:$folder", span = { GridItemSpan(maxLineSpan) }) { FolderHeader(folder) }
+                                }
+                                items(group, key = { it.path }) { item ->
+                                    FileGridItem(
+                                        item = item,
+                                        isSelected = selectedItems.contains(item),
+                                        isSelectionMode = isSelectionMode,
+                                        onClick = { onItemClick(item) },
+                                        onLongClick = { viewModel.toggleSelection(item) }
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -712,31 +722,23 @@ fun ExplorerScreen(
                             contentPadding = PaddingValues(vertical = 4.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(fileList, key = { it.path }) { item ->
-                                val isSelected = selectedItems.contains(item)
-                                FileListItem(
-                                    item = item,
-                                    isSelected = isSelected,
-                                    isSelectionMode = isSelectionMode,
-                                    onClick = {
-                                        if (isSelectionMode) {
-                                            viewModel.toggleSelection(item)
-                                        } else if (item.isDirectory) {
-                                            viewModel.navigateTo(item.path)
-                                        } else if (ArchiveManager.isArchive(item.name)) {
-                                            extractTarget = item
-                                        } else {
-                                            if (item.category == FileCategory.VIDEO) openVideo(item) else if (item.category == FileCategory.AUDIO) playAudio(item) else handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        viewModel.toggleSelection(item)
-                                    },
-                                    onRename = { renameTarget = item },
-                                    onDelete = { deleteConfirmTargets = listOf(item) },
-                                    onPermissions = { permissionsTarget = item },
-                                    onDetails = { detailsTarget = item }
-                                )
+                            sections.forEach { (folder, group) ->
+                                if (folder != null) {
+                                    item(key = "folder:$folder") { FolderHeader(folder) }
+                                }
+                                items(group, key = { it.path }) { item ->
+                                    FileListItem(
+                                        item = item,
+                                        isSelected = selectedItems.contains(item),
+                                        isSelectionMode = isSelectionMode,
+                                        onClick = { onItemClick(item) },
+                                        onLongClick = { viewModel.toggleSelection(item) },
+                                        onRename = { renameTarget = item },
+                                        onDelete = { deleteConfirmTargets = listOf(item) },
+                                        onPermissions = { permissionsTarget = item },
+                                        onDetails = { detailsTarget = item }
+                                    )
+                                }
                             }
                         }
                     }
@@ -796,5 +798,20 @@ private fun VideoChoiceDialog(onDismiss: () -> Unit, onChoose: (builtIn: Boolean
         dismissButton = {
             TextButton(onClick = { onChoose(false, remember) }) { Text(str(R.string.another_app)) }
         }
+    )
+}
+
+@Composable
+private fun FolderHeader(folder: String) {
+    Text(
+        text = folder,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     )
 }
