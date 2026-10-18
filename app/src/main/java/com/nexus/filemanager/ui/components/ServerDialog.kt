@@ -1,5 +1,14 @@
 package com.nexus.filemanager.ui.components
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.widget.Toast
+import android.net.Uri
 import com.nexus.filemanager.str
 import com.nexus.filemanager.R
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +65,8 @@ fun ServerDialog(
     qshAvailable: Boolean,
     onTest: (ServerConfig, (error: String?) -> Unit) -> Unit,
     onPair: (ServerConfig, code: String, (ok: Boolean, message: String) -> Unit) -> Unit,
+    phoneKey: suspend () -> String,
+    importKey: suspend (Uri, serverId: String) -> String,
     onDismiss: () -> Unit,
     onSave: (ServerConfig) -> Unit
 ) {
@@ -71,6 +82,17 @@ fun ServerDialog(
     var isAnonymous by remember { mutableStateOf(initialConfig?.isAnonymous ?: false) }
     var showPassword by remember { mutableStateOf(false) }
     var pairCode by remember { mutableStateOf("") }
+    var keyPath by remember { mutableStateOf(initialConfig?.keyPath ?: "") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val pickKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching { importKey(uri, id) }
+                .onSuccess { keyPath = it }
+                .onFailure { Toast.makeText(context, it.message, Toast.LENGTH_LONG).show() }
+        }
+    }
 
     // null = not run; "" = success; else the error.
     var status by remember { mutableStateOf<String?>(null) }
@@ -89,7 +111,8 @@ fun ServerDialog(
         password = if (usesPassword) password else "",
         shareName = shareName.trim(),
         remotePath = remotePath.trim(),
-        isAnonymous = usesPassword && isAnonymous
+        isAnonymous = usesPassword && isAnonymous,
+        keyPath = if (protocol == StorageType.SFTP || protocol == StorageType.QSH) keyPath else ""
     )
 
     val ready = host.isNotBlank() && (!isQsh || username.isNotBlank())
@@ -235,6 +258,44 @@ fun ServerDialog(
                             }
                         }
                     )
+                }
+
+                if (isQsh || protocol == StorageType.SFTP) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(str(R.string.key_login), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        str(if (isQsh) R.string.phone_key_hint else R.string.sftp_key_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isQsh) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { phoneKey() }
+                                        .onSuccess {
+                                            clipboard.setText(AnnotatedString(it))
+                                            Toast.makeText(context, str(R.string.key_copied), Toast.LENGTH_SHORT).show()
+                                        }
+                                        .onFailure { Toast.makeText(context, it.message, Toast.LENGTH_LONG).show() }
+                                }
+                            },
+                            enabled = qshAvailable
+                        ) { Text(str(R.string.copy_phone_key)) }
+                    }
+                    if (keyPath.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                str(R.string.own_key_set, java.io.File(keyPath).name),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { keyPath = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = str(R.string.remove_key))
+                            }
+                        }
+                    }
+                    OutlinedButton(onClick = { pickKey.launch(arrayOf("*/*")) }) { Text(str(R.string.choose_key_file)) }
                 }
 
                 if (isQsh) {

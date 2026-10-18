@@ -245,7 +245,7 @@
     <string name="show_hidden_files_2">Show hidden files</string>
     <string name="shuffle">Shuffle</string>
     <string name="sign_in">Sign in</string>
-    <string name="signs_in_with_this_phone_s_key_link_it_t">Signs in with this phone\'s key. Link it to the server once: run `qshd pair` there as this user and enter the code.</string>
+    <string name="signs_in_with_this_phone_s_key_link_it_t">Or pair with a code: run `qshd pair` on the server as this user and enter the code here.</string>
     <string name="size">Size</string>
     <string name="smallest_first">Smallest first</string>
     <string name="sort">Sort</string>
@@ -315,4 +315,12 @@
     <string name="cmd_group_network">Network</string>
     <string name="cmd_group_apps">Apps</string>
     <string name="cmd_group_root">Root</string>
+    <string name="key_login">Sign in with a key</string>
+    <string name="phone_key_hint">This phone\'s key. Add it on the server to ~/.config/qsh/authorized_keys (qsh) or ~/.ssh/authorized_keys (SFTP), or pair with a code below.</string>
+    <string name="copy_phone_key">Copy this phone\'s key</string>
+    <string name="choose_key_file">Use my own key file…</string>
+    <string name="own_key_set">Own key: %1$s</string>
+    <string name="remove_key">Remove the key</string>
+    <string name="not_a_private_key">This is not an OpenSSH private key file</string>
+    <string name="sftp_key_hint">For SFTP the phone\'s own key is not used: pick a key file, or sign in with the password.</string>
 </resources>

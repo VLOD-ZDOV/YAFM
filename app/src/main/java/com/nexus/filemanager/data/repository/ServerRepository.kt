@@ -38,7 +38,8 @@ class ServerRepository(context: Context, private val onChanged: (String) -> Unit
                         password = readPassword(obj),
                         shareName = obj.optString("shareName", ""),
                         remotePath = obj.optString("remotePath", ""),
-                        isAnonymous = obj.optBoolean("isAnonymous", false)
+                        isAnonymous = obj.optBoolean("isAnonymous", false),
+                        keyPath = obj.optString("keyPath", "")
                     )
                 )
             }
@@ -70,6 +71,8 @@ class ServerRepository(context: Context, private val onChanged: (String) -> Unit
     }
 
     fun deleteServer(id: String) {
+        // An imported key goes with its server.
+        getServer(id)?.keyPath?.takeIf { it.isNotEmpty() }?.let { java.io.File(it).delete() }
         val current = _servers.value.filter { it.id != id }
         persist(current)
         onChanged(id)
@@ -93,6 +96,7 @@ class ServerRepository(context: Context, private val onChanged: (String) -> Unit
                 put("shareName", server.shareName)
                 put("remotePath", server.remotePath)
                 put("isAnonymous", server.isAnonymous)
+                put("keyPath", server.keyPath)
             }
             jsonArray.put(obj)
         }

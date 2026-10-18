@@ -18,7 +18,9 @@ data class ServerConfig(
     val password: String = "",
     val shareName: String = "",     // SMB share name, e.g. "Public" or "shared"
     val remotePath: String = "",     // Start directory; empty = the server's home (SFTP/qsh) or "/"
-    val isAnonymous: Boolean = false
+    val isAnonymous: Boolean = false,
+    /** A private key file imported for this server (SFTP, qsh); empty: password or this phone's qsh key. */
+    val keyPath: String = ""
 ) {
     fun summary(): String {
         return when (type) {

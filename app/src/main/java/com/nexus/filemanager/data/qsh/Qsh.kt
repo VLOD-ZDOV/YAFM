@@ -37,6 +37,13 @@ class Qsh(context: Context) {
         runCatching { Os.chmod(config.path, "600".toInt(8)) }
     }
 
+    /** Whether some sftp session is a master that `qsh cp` can ride on (a socket besides the locks). */
+    fun hasSharedConnection(): Boolean = controlDir.listFiles()?.any { !it.name.endsWith(".lock") } == true
+
+    /** `-i key` for a server with an imported key; this phone's own key is qsh's default. */
+    private fun identity(c: ServerConfig): List<String> =
+        if (c.keyPath.isNotEmpty()) listOf("-i", c.keyPath) else emptyList()
+
     /** This phone's public key, for authorized_keys on a server (made on first use). */
     fun publicKey(): String {
         val pub = File(configDir, "id_ed25519.pub")
@@ -80,7 +87,7 @@ class Qsh(context: Context) {
      * anything (BatchMode); a server that wants a one-time code then fails with [CodeRequired.MARKER].
      */
     fun startSftp(c: ServerConfig, code: String? = null): Process = start(
-        listOf("-q", "-p", c.port.toString(), "-o", "BatchMode=${if (code == null) "yes" else "no"}",
+        listOf("-q", "-p", c.port.toString()) + identity(c) + listOf("-o", "BatchMode=${if (code == null) "yes" else "no"}",
             "-o", "StrictHostKeyChecking=accept-new", "-o", "ControlMaster=auto",
             "-s", destination(c), "sftp"),
         code
@@ -101,7 +108,7 @@ class Qsh(context: Context) {
     }
 
     /** `qsh pair`: registers this app's key on the server with a code from `qshd pair` and pins the host key. */
-    fun pair(c: ServerConfig, code: String): String = run(listOf("pair", "-p", c.port.toString(), destination(c), code.trim()))
+    fun pair(c: ServerConfig, code: String): String = run(listOf("pair", "-p", c.port.toString()) + identity(c) + listOf(destination(c), code.trim()))
 
     fun upload(c: ServerConfig, localPath: String, remoteDir: String, recursive: Boolean) =
         copy(c, listOf(localPath, "${destination(c)}:${remoteDir.trimEnd('/')}/"), recursive)
@@ -111,6 +118,7 @@ class Qsh(context: Context) {
 
     private fun copy(c: ServerConfig, paths: List<String>, recursive: Boolean) {
         val args = mutableListOf("cp", "-p", c.port.toString(), "--accept-new-host")
+        args += identity(c)
         if (recursive) args += "-r"
         run(args + "--" + paths, timeoutMinutes = 24 * 60)
     }

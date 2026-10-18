@@ -25,6 +25,16 @@ class QshFileSystem(
     @Volatile
     var pendingCode: String? = null
 
+    @Volatile
+    private var loggedInWithCode = false
+
+    /**
+     * `qsh cp` logs in on its own unless it can share the session; after a one-time code it could not
+     * ask for another, so then copies go through the sftp session instead. (Android may refuse the
+     * hard link qsh makes its shared socket with.)
+     */
+    fun canUseCp(): Boolean = !loggedInWithCode || qsh.hasSharedConnection()
+
     @Synchronized
     private fun sftp(): SftpChannel {
         channel?.takeIf { process?.isAlive == true }?.let { return it }
@@ -53,6 +63,7 @@ class QshFileSystem(
             throw IOException(err.ifEmpty { e.message ?: str(R.string.qsh_could_not_connect) })
         }
         process = p
+        loggedInWithCode = code != null
         return channel!!
     }
 

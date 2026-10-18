@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Single entry point to all storages. Keeps one open connection per server until it is edited or deleted. */
 class FileRepository(context: Context) {
+    private val appContext = context.applicationContext
 
     /** Set once root is confirmed; local access then falls back to root where Android refuses it. */
     @Volatile
@@ -158,8 +159,8 @@ class FileRepository(context: Context) {
             when {
                 move && sameFs -> src.rename(item.path, target)
                 sameFs && src.copyWithin(item, target) -> Unit
-                src is QshFileSystem && dst is LocalFileSystem && name == item.name -> src.download(item, dest.path)
-                dst is QshFileSystem && src is LocalFileSystem && name == item.name ->
+                src is QshFileSystem && dst is LocalFileSystem && name == item.name && src.canUseCp() -> src.download(item, dest.path)
+                dst is QshFileSystem && src is LocalFileSystem && name == item.name && dst.canUseCp() ->
                     dst.upload(item.path, item.isDirectory, dest.path)
                 else -> skipped += copyTree(src, item, dst, target)
             }
@@ -195,7 +196,7 @@ class FileRepository(context: Context) {
         checkName(item.name)
         val out = File(dir, item.name)
         val src = fs(item)
-        if (src is QshFileSystem && !item.isDirectory) {
+        if (src is QshFileSystem && !item.isDirectory && src.canUseCp()) {
             src.download(item, dir.absolutePath)
         } else {
             src.openRead(item.path).use { input -> out.outputStream().use { input.copyTo(it, 64 * 1024) } }
@@ -245,6 +246,19 @@ class FileRepository(context: Context) {
             f.list(start)
         }
         Unit
+    }
+
+    /** Copies a private key the user picked into app storage, readable by the app alone; returns its path. */
+    suspend fun importKey(uri: android.net.Uri, serverId: String): String = io {
+        val text = appContext.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+            ?: throw IOException(str(R.string.not_a_private_key))
+        if (!text.contains("PRIVATE KEY-----")) throw IOException(str(R.string.not_a_private_key))
+        val dir = File(appContext.filesDir, "keys").apply { mkdirs() }
+        val file = File(dir, "$serverId.key")
+        file.writeText(text)
+        // qsh and OpenSSH refuse key files others can read.
+        android.system.Os.chmod(file.path, "600".toInt(8))
+        file.absolutePath
     }
 
     /** A one-time code for the next login to this qsh server (see [Qsh.CodeRequired]). */

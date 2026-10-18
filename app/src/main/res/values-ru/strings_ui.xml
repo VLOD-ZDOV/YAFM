@@ -245,7 +245,7 @@
     <string name="show_hidden_files_2">Показывать скрытые файлы</string>
     <string name="shuffle">Перемешать</string>
     <string name="sign_in">Войти</string>
-    <string name="signs_in_with_this_phone_s_key_link_it_t">Вход по ключу этого телефона. Один раз свяжите его с сервером: выполните там `qshd pair` под этим пользователем и введите код.</string>
+    <string name="signs_in_with_this_phone_s_key_link_it_t">Или свяжите кодом: выполните на сервере `qshd pair` под этим пользователем и введите код здесь.</string>
     <string name="size">Размер</string>
     <string name="smallest_first">Сначала маленькие</string>
     <string name="sort">Сортировка</string>
@@ -315,4 +315,12 @@
     <string name="cmd_group_network">Сеть</string>
     <string name="cmd_group_apps">Приложения</string>
     <string name="cmd_group_root">Root</string>
+    <string name="key_login">Вход по ключу</string>
+    <string name="phone_key_hint">Ключ этого телефона. Добавьте его на сервере в ~/.config/qsh/authorized_keys (qsh) или ~/.ssh/authorized_keys (SFTP), или свяжите кодом ниже.</string>
+    <string name="copy_phone_key">Скопировать ключ телефона</string>
+    <string name="choose_key_file">Использовать свой файл ключа…</string>
+    <string name="own_key_set">Свой ключ: %1$s</string>
+    <string name="remove_key">Убрать ключ</string>
+    <string name="not_a_private_key">Это не файл закрытого ключа OpenSSH</string>
+    <string name="sftp_key_hint">Для SFTP ключ телефона не используется: выберите файл ключа или войдите по паролю.</string>
 </resources>

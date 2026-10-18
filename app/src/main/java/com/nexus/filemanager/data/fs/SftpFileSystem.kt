@@ -26,7 +26,13 @@ class SftpFileSystem(
     private fun session(): Session {
         session?.takeIf { it.isConnected }?.let { return it }
         if (!knownHosts.exists()) knownHosts.createNewFile()
-        val jsch = JSch().apply { setKnownHosts(knownHosts.absolutePath) }
+        val jsch = JSch().apply {
+            setKnownHosts(knownHosts.absolutePath)
+            // An imported key; the password then doubles as its passphrase.
+            if (config.keyPath.isNotEmpty()) {
+                if (config.password.isEmpty()) addIdentity(config.keyPath) else addIdentity(config.keyPath, config.password)
+            }
+        }
         val s = jsch.getSession(config.username, config.host, config.port)
         s.setPassword(config.password)
         // "ask" + this UserInfo = OpenSSH's accept-new: remember unknown keys, refuse changed ones.

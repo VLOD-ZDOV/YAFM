@@ -1,5 +1,7 @@
 package com.nexus.filemanager.ui.screens
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.nexus.filemanager.str
 import androidx.compose.ui.res.stringResource
 import com.nexus.filemanager.R
@@ -141,6 +143,8 @@ fun HomeScreen(
             qshAvailable = viewModel.repository.qsh.isAvailable,
             onTest = viewModel::testConnection,
             onPair = viewModel::pairQsh,
+            phoneKey = { withContext(Dispatchers.IO) { viewModel.repository.qsh.publicKey() } },
+            importKey = { uri, id -> viewModel.repository.importKey(uri, id) },
             onDismiss = close,
             onSave = { config ->
                 viewModel.serverRepo.saveServer(config)
