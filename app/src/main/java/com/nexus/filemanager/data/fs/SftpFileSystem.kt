@@ -34,10 +34,16 @@ class SftpFileSystem(
             }
         }
         val s = jsch.getSession(config.username, config.host, config.port)
-        s.setPassword(config.password)
+        val withKey = config.keyPath.isNotEmpty()
+        if (withKey) {
+            // The password field is the key's passphrase then: it must never reach the server as a password.
+            s.setConfig("PreferredAuthentications", "publickey")
+        } else {
+            s.setPassword(config.password)
+        }
         // "ask" + this UserInfo = OpenSSH's accept-new: remember unknown keys, refuse changed ones.
         s.setConfig("StrictHostKeyChecking", "ask")
-        s.userInfo = AcceptNewHostKeys(config.password)
+        s.userInfo = AcceptNewHostKeys(if (withKey) "" else config.password)
         s.setServerAliveInterval(15_000)
         s.connect(10_000)
         session = s
