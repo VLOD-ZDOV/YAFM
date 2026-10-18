@@ -1,5 +1,6 @@
 package com.nexus.filemanager.ui.screens
 
+import androidx.compose.material3.AssistChip
 import com.nexus.filemanager.str
 import com.nexus.filemanager.R
 import androidx.activity.compose.BackHandler
@@ -140,49 +141,73 @@ fun RootTerminalScreen(
                 .consumeWindowInsets(paddingValues)
                 .imePadding()
         ) {
-            // Quick Command Chips
+            // Quick commands, by group: mostly read-only looks at the system.
+            var group by remember { mutableStateOf(0) }
+            val groups = remember {
+                listOf(
+                    R.string.cmd_group_system to listOf(
+                        "Android" to "getprop ro.build.version.release; getprop ro.build.version.security_patch",
+                        "Build" to "getprop ro.build.fingerprint",
+                        "Kernel" to "uname -a",
+                        "Uptime" to "uptime",
+                        "SELinux" to "getenforce",
+                        "SELinux → Permissive" to "setenforce 0; getenforce",
+                        "SELinux → Enforcing" to "setenforce 1; getenforce",
+                        "Mounts" to "mount | grep -E ' /(system|vendor|product|odm|data) '",
+                        "df -h" to "df -h"
+                    ),
+                    R.string.cmd_group_hardware to listOf(
+                        "Battery" to "dumpsys battery | grep -E 'level|status|health|temperature|voltage|charge counter'",
+                        "Temperatures" to "for z in /sys/class/thermal/thermal_zone*; do echo \"$(cat \$z/type): $(cat \$z/temp)\"; done 2>/dev/null | head -30",
+                        "CPU" to "grep -m1 -E 'Hardware|model name' /proc/cpuinfo; nproc",
+                        "CPU MHz" to "for c in /sys/devices/system/cpu/cpu[0-9]*; do echo \"\${c##*/}: $((\$(cat \$c/cpufreq/scaling_cur_freq) / 1000)) MHz\"; done 2>/dev/null",
+                        "Memory" to "free -h 2>/dev/null || head -5 /proc/meminfo",
+                        "Display" to "wm size; wm density"
+                    ),
+                    R.string.cmd_group_network to listOf(
+                        "IP" to "ip -br addr",
+                        "Routes" to "ip route",
+                        "DNS" to "getprop net.dns1; getprop net.dns2",
+                        "Ports" to "netstat -tln 2>/dev/null || ss -tln",
+                        "Ping 1.1.1.1" to "ping -c 3 -W 2 1.1.1.1",
+                        "Wi-Fi" to "dumpsys wifi | grep -m1 'mWifiInfo'"
+                    ),
+                    R.string.cmd_group_apps to listOf(
+                        "Top" to "top -b -n 1 -m 15",
+                        "Current app" to "dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity'",
+                        "User apps" to "pm list packages -3 | wc -l",
+                        "Log" to "logcat -d -t 40",
+                        "Crashes" to "logcat -d -b crash -t 40"
+                    ),
+                    R.string.cmd_group_root to listOf(
+                        "Modules" to "ls /data/adb/modules 2>/dev/null",
+                        "Root version" to "magisk -v 2>/dev/null; ksud -V 2>/dev/null; apd -V 2>/dev/null; su -v",
+                        "Boot state" to "getprop ro.boot.verifiedbootstate; getprop ro.boot.flash.locked",
+                        "id" to "id"
+                    )
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("getenforce") },
-                    label = { Text(str(R.string.selinux_status)) }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("setenforce 0; getenforce") },
-                    label = { Text("SELinux Permissive") }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("setenforce 1; getenforce") },
-                    label = { Text("SELinux Enforcing") }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("df -h") },
-                    label = { Text(str(R.string.partitions_df_h)) }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("uname -a") },
-                    label = { Text(str(R.string.kernel_uname_a)) }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("ls -la /data/adb/modules 2>/dev/null") },
-                    label = { Text(str(R.string.magisk_modules)) }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { runCmd("getprop ro.build.version.release") },
-                    label = { Text("Android Version") }
-                )
+                groups.forEachIndexed { i, (title, _) ->
+                    FilterChip(selected = group == i, onClick = { group = i }, label = { Text(str(title)) })
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                groups[group].second.forEach { (label, command) ->
+                    AssistChip(onClick = { runCmd(command) }, label = { Text(label) })
+                }
             }
 
             // Terminal Black Screen

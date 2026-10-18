@@ -310,4 +310,9 @@
     <string name="seek_step">Шаг перемотки</string>
     <string name="seconds_n">%1$s с</string>
     <string name="video_side_gestures">Яркость и громкость свайпами по краям экрана</string>
+    <string name="cmd_group_system">Система</string>
+    <string name="cmd_group_hardware">Железо</string>
+    <string name="cmd_group_network">Сеть</string>
+    <string name="cmd_group_apps">Приложения</string>
+    <string name="cmd_group_root">Root</string>
 </resources>

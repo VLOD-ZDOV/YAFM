@@ -310,4 +310,9 @@
     <string name="seek_step">Seek step</string>
     <string name="seconds_n">%1$s s</string>
     <string name="video_side_gestures">Brightness and volume swipes at the screen edges</string>
+    <string name="cmd_group_system">System</string>
+    <string name="cmd_group_hardware">Hardware</string>
+    <string name="cmd_group_network">Network</string>
+    <string name="cmd_group_apps">Apps</string>
+    <string name="cmd_group_root">Root</string>
 </resources>
