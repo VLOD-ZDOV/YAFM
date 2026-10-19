@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NexusFileManager"
+rootProject.name = "YAFM"
 include(":app")

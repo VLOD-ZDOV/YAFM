@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nexus.filemanager"
+    namespace = "com.yafm.filemanager"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.nexus.filemanager"
+        applicationId = "com.yafm.filemanager"
         minSdk = 26
         targetSdk = 35
         versionCode = 3
