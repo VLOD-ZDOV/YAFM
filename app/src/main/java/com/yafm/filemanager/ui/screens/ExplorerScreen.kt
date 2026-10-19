@@ -162,6 +162,7 @@ fun ExplorerScreen(
     val typeFilter by viewModel.typeFilter.collectAsState()
     val availableTypes by viewModel.availableTypes.collectAsState()
     val collapsedFolders by viewModel.collapsedFolders.collectAsState()
+    val sortMode by viewModel.sortMode.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -438,48 +439,23 @@ fun ExplorerScreen(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.name_a_z)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.NAME_ASC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.name_z_a)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.NAME_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.newest_first)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.DATE_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.oldest_first)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.DATE_ASC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.largest_first)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.SIZE_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(str(R.string.smallest_first)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.SIZE_ASC)
-                                    showSortMenu = false
-                                }
-                            )
+                            listOf(
+                                SortMode.NAME_ASC to R.string.name_a_z,
+                                SortMode.NAME_DESC to R.string.name_z_a,
+                                SortMode.DATE_DESC to R.string.newest_first,
+                                SortMode.DATE_ASC to R.string.oldest_first,
+                                SortMode.SIZE_DESC to R.string.largest_first,
+                                SortMode.SIZE_ASC to R.string.smallest_first
+                            ).forEach { (mode, title) ->
+                                DropdownMenuItem(
+                                    text = { Text(str(title)) },
+                                    trailingIcon = { if (mode == sortMode) Icon(Icons.Default.Check, contentDescription = null) },
+                                    onClick = {
+                                        viewModel.setSortMode(mode)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
 

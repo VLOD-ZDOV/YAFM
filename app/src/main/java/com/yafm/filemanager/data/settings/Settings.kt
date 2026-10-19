@@ -43,6 +43,16 @@ class SettingsRepository(context: Context) {
         collapsedFolders = prefs.getStringSet("collapsedFolders", null)?.toSet() ?: emptySet()
     )
 
+    // Per-folder sort orders live apart from the settings: there can be many of them.
+    private val sorts = context.getSharedPreferences("folder_sort", Context.MODE_PRIVATE)
+
+    fun folderSort(key: String): String? = sorts.getString(key, null)
+
+    /** Null forgets the folder's order. */
+    fun setFolderSort(key: String, mode: String?) {
+        sorts.edit().apply { if (mode == null) remove(key) else putString(key, mode) }.apply()
+    }
+
     private inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
         name?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: default
 

@@ -108,7 +108,14 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _isGridView = MutableStateFlow(settings.settings.value.gridView)
     val isGridView: StateFlow<Boolean> = _isGridView.asStateFlow()
 
-    private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
+    /** Each folder, category and server folder keeps its own sort order; NAME_ASC is not stored. */
+    private fun sortKey(loc: Location) = loc.category?.let { "category:${it.name}" }
+        ?: "${loc.type.name}:${loc.server?.id ?: ""}:${loc.path}"
+
+    private fun savedSort(loc: Location) = settings.folderSort(sortKey(loc))
+        ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() } ?: SortMode.NAME_ASC
+
+    private val _sortMode = MutableStateFlow(savedSort(_location.value))
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
     /** Extensions shown in a category; empty: all of them. */
@@ -211,21 +218,24 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private fun go(target: Location) {
         if (target == _location.value) return loadCurrentDirectory()
         history.addLast(_location.value)
-        _location.value = target
-        _searchQuery.value = ""
-        _typeFilter.value = emptySet()
+        show(target)
         loadCurrentDirectory()
     }
 
     /** Another directory in the current storage. */
     fun navigateTo(path: String) = go(_location.value.copy(path = path))
 
-    /** Entering the explorer from outside: history starts over, so Back from here returns to where it came from. */
-    private fun enter(target: Location) {
-        history.clear()
+    private fun show(target: Location) {
         _location.value = target
         _searchQuery.value = ""
         _typeFilter.value = emptySet()
+        _sortMode.value = savedSort(target)
+    }
+
+    /** Entering the explorer from outside: history starts over, so Back from here returns to where it came from. */
+    private fun enter(target: Location) {
+        history.clear()
+        show(target)
         loadCurrentDirectory()
     }
 
@@ -253,9 +263,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun navigateBack(): Boolean {
         val previous = history.removeLastOrNull() ?: return false
-        _location.value = previous
-        _searchQuery.value = ""
-        _typeFilter.value = emptySet()
+        show(previous)
         loadCurrentDirectory()
         return true
     }
@@ -308,6 +316,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun setSortMode(mode: SortMode) {
         _sortMode.value = mode
+        settings.setFolderSort(sortKey(_location.value), mode.name.takeIf { mode != SortMode.NAME_ASC })
     }
 
     fun toggleType(extension: String) {
