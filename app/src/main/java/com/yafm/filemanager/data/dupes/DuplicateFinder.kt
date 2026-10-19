@@ -32,6 +32,24 @@ object DuplicateFinder {
         return result.sortedByDescending { it[0].size * (it.size - 1) }
     }
 
+    // Folders that apps fill and clean up themselves: a copy kept there may vanish later.
+    private val TEMPORARY = listOf(
+        "/android/data/", "/android/media/", "/telegram", "/whatsapp", "/viber", "/cache", "/.thumbnails", "/tmp", "/temp"
+    )
+    private val LASTING = listOf("/dcim/", "/pictures/", "/music/", "/documents/", "/download/", "/movies/")
+
+    /** The copy to keep: one in a lasting folder over one in a temporary folder, then the oldest. */
+    fun keeper(group: List<FileItem>): FileItem = group.minWith(
+        compareBy<FileItem> { item ->
+            val path = item.path.lowercase()
+            when {
+                TEMPORARY.any { it in path } -> 2
+                LASTING.any { it in path } -> 0
+                else -> 1
+            }
+        }.thenBy { it.lastModified }
+    )
+
     /** An unreadable file gets a key of its own, so it never matches another one. */
     private fun digest(item: FileItem, limit: Long): String = runCatching {
         val md = MessageDigest.getInstance("MD5")

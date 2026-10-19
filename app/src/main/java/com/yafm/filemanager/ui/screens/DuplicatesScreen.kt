@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yafm.filemanager.data.dupes.DuplicateFinder
 import com.yafm.filemanager.data.model.FileItem
 import com.yafm.filemanager.ui.components.FileIcon
 import com.yafm.filemanager.ui.viewmodel.FileExplorerViewModel
@@ -101,23 +102,33 @@ fun DuplicatesScreen(
         bottomBar = {
             val current = groups
             if (!current.isNullOrEmpty()) {
+                Column(modifier = Modifier.navigationBarsPadding()) {
+                if (current.any { marked.containsAll(it) }) {
+                    Text(
+                        str(R.string.keep_one_copy),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // The oldest copy of each group stays: it is most likely the original.
                     FilledTonalButton(
-                        onClick = { marked = current.flatMap { it.drop(1) }.toSet() },
+                        onClick = { marked = current.flatMap { it - DuplicateFinder.keeper(it) }.toSet() },
                         modifier = Modifier.weight(1f)
                     ) { Text(str(R.string.mark_extra_copies), maxLines = 1) }
+                    // Every copy of a file marked would delete it for good.
+                    val wholeGroup = current.any { marked.containsAll(it) }
                     Button(
                         onClick = { confirmDelete = true },
-                        enabled = marked.isNotEmpty(),
+                        enabled = marked.isNotEmpty() && !wholeGroup,
                         modifier = Modifier.weight(1f)
                     ) { Text(str(R.string.delete_n, marked.size), maxLines = 1) }
+                }
                 }
             }
         }

@@ -333,4 +333,5 @@
     <string name="mark_extra_copies">Mark extra copies</string>
     <string name="delete_n">Delete (%1$d)</string>
     <string name="cmd_group_processes">Processes</string>
+    <string name="keep_one_copy">Leave at least one copy of each file unmarked</string>
 </resources>

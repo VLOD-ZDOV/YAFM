@@ -36,4 +36,15 @@ class DuplicateFinderTest {
             base.deleteRecursively()
         }
     }
+
+    @Test
+    fun keepsTheCopyOutsideAppFolders() {
+        val gallery = FileItem(name = "a.jpg", path = "/storage/emulated/0/DCIM/Camera/a.jpg", size = 1, lastModified = 200)
+        val telegram = FileItem(name = "a.jpg", path = "/storage/emulated/0/Telegram/Telegram Images/a.jpg", size = 1, lastModified = 100)
+        val other = FileItem(name = "a.jpg", path = "/storage/emulated/0/Stuff/a.jpg", size = 1, lastModified = 150)
+        assertEquals(gallery, DuplicateFinder.keeper(listOf(telegram, other, gallery)))
+        assertEquals(other, DuplicateFinder.keeper(listOf(telegram, other)))
+        val older = other.copy(path = "/storage/emulated/0/Misc/a.jpg", lastModified = 50)
+        assertEquals(older, DuplicateFinder.keeper(listOf(other, older)))
+    }
 }
