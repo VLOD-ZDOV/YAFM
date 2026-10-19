@@ -9,7 +9,8 @@ An Android file manager for phone storage, root and network servers, with a vide
 ### Files
 - Phone storage, and the whole file system with root (KernelSU, Magisk, APatch).
 - Copy and move between any storages: phone, root, SFTP, qsh, SMB, FTP. Names already taken get a “ (1)” suffix, nothing is overwritten.
-- Categories on the home screen list every image, video, song, document or archive in internal storage.
+- Categories on the home screen list every image, video, song, document or archive in internal storage, grouped by folder. A folder's files are selected with one tap, and a category can be narrowed to some file types (say, pdf and docx).
+- Duplicates: files with the same content, under any name, in a category or a folder tree. The copy outside messenger and cache folders is kept.
 - Thumbnails for images and videos, list and grid views, search, sorting, hidden files.
 - Batch rename, permissions (chmod), file properties with MD5 and SHA-256.
 - Links are never followed when deleting or copying folders: a link is removed, not what it points to.
@@ -21,7 +22,7 @@ An Android file manager for phone storage, root and network servers, with a vide
 
 ### Players
 - Video: libVLC, so nearly any format plays (mkv with AC3/DTS, avi, wmv, flv...). Gestures for seeking, brightness and volume, audio track and subtitle choice, speed, frame modes, screen lock, resume, next/previous in the folder. Opening a video can ask whether to use it or another app.
-- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue.
+- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue (also from the Music category).
 
 ### Network storage
 - **SFTP** (SSH): one connection per server; the server key is remembered on first connect and a changed key is refused.
@@ -30,7 +31,7 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Saved passwords are encrypted with a key from the Android Keystore.
 
 ### Other
-- App manager with APK backup, storage analysis by type, root shell, text editor.
+- App manager with APK backup, storage analysis by type, root shell (with the top CPU and RAM processes), text editor.
 - Themes: system, light, dark and AMOLED black, with wallpaper colors.
 - Updates from GitHub releases, checked at startup (can be turned off).
 - English and Russian.
