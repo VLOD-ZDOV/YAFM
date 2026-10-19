@@ -173,11 +173,16 @@ fun RootTerminalScreen(
                         "Wi-Fi" to "dumpsys wifi | grep -m1 'mWifiInfo'"
                     ),
                     R.string.cmd_group_apps to listOf(
-                        "Top" to "top -b -n 1 -m 15",
                         "Current app" to "dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity'",
                         "User apps" to "pm list packages -3 | wc -l",
                         "Log" to "logcat -d -t 40",
                         "Crashes" to "logcat -d -b crash -t 40"
+                    ),
+                    // CPU is averaged over 3 s: the second frame of top covers just that interval.
+                    R.string.cmd_group_processes to listOf(
+                        "Top CPU (3 s)" to "top -b -n 2 -d 3 -m 12 | awk '/Tasks:/{n++} n==2'",
+                        "Top RAM" to "ps -A -o PID,USER,RSS,NAME -k -rss | head -13 | awk 'NR==1{printf \"%6s %-12s %7s  %s\\n\", \"PID\", \"USER\", \"MB\", \"NAME\"; next} {printf \"%6s %-12s %7.1f  %s\\n\", \$1, \$2, \$3/1024, \$4}'",
+                        "Top" to "top -b -n 1 -m 15"
                     ),
                     R.string.cmd_group_root to listOf(
                         "Modules" to "ls /data/adb/modules 2>/dev/null",
