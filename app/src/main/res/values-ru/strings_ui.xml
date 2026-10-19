@@ -334,4 +334,8 @@
     <string name="delete_n">Удалить (%1$d)</string>
     <string name="cmd_group_processes">Процессы</string>
     <string name="keep_one_copy">Оставьте без отметки хотя бы одну копию каждого файла</string>
+    <string name="collapse_all">Свернуть все папки</string>
+    <string name="expand_all">Развернуть все папки</string>
+    <string name="collapse">Свернуть</string>
+    <string name="expand">Развернуть</string>
 </resources>

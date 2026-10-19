@@ -71,6 +71,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import com.yafm.filemanager.data.settings.VideoPlayer
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -159,6 +161,7 @@ fun ExplorerScreen(
     val progress by viewModel.progress.collectAsState()
     val typeFilter by viewModel.typeFilter.collectAsState()
     val availableTypes by viewModel.availableTypes.collectAsState()
+    val collapsedFolders by viewModel.collapsedFolders.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -504,6 +507,17 @@ fun ExplorerScreen(
                                     }
                                 )
                             }
+                            if (location.category != null) {
+                                val folders = FileExplorerViewModel.groupByFolder(fileList, location.path).mapNotNull { it.first }
+                                val allCollapsed = folders.isNotEmpty() && collapsedFolders.containsAll(folders)
+                                DropdownMenuItem(
+                                    text = { Text(if (allCollapsed) str(R.string.expand_all) else str(R.string.collapse_all)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.setFoldersCollapsed(folders, !allCollapsed)
+                                    }
+                                )
+                            }
                             if (viewModel.canFindDuplicates) {
                                 DropdownMenuItem(
                                     text = { Text(str(R.string.find_duplicates)) },
@@ -753,17 +767,21 @@ fun ExplorerScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             sections.forEach { (folder, group) ->
+                                val collapsed = folder != null && folder in collapsedFolders
                                 if (folder != null) {
                                     item(key = "folder:$folder", span = { GridItemSpan(maxLineSpan) }) {
                                     FolderHeader(
                                         folder = folder,
+                                        count = group.size,
+                                        collapsed = collapsed,
+                                        onToggleCollapse = { viewModel.toggleFolderCollapsed(folder) },
                                         allSelected = selectedItems.containsAll(group),
                                         onToggleSelection = { viewModel.toggleGroupSelection(group) },
                                         onPlay = if (location.category == FileCategory.AUDIO) ({ playAudio(group.first()) }) else null
                                     )
                                 }
                                 }
-                                items(group, key = { it.path }) { item ->
+                                if (!collapsed) items(group, key = { it.path }) { item ->
                                     FileGridItem(
                                         item = item,
                                         isSelected = selectedItems.contains(item),
@@ -781,17 +799,21 @@ fun ExplorerScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             sections.forEach { (folder, group) ->
+                                val collapsed = folder != null && folder in collapsedFolders
                                 if (folder != null) {
                                     item(key = "folder:$folder") {
                                     FolderHeader(
                                         folder = folder,
+                                        count = group.size,
+                                        collapsed = collapsed,
+                                        onToggleCollapse = { viewModel.toggleFolderCollapsed(folder) },
                                         allSelected = selectedItems.containsAll(group),
                                         onToggleSelection = { viewModel.toggleGroupSelection(group) },
                                         onPlay = if (location.category == FileCategory.AUDIO) ({ playAudio(group.first()) }) else null
                                     )
                                 }
                                 }
-                                items(group, key = { it.path }) { item ->
+                                if (!collapsed) items(group, key = { it.path }) { item ->
                                     FileListItem(
                                         item = item,
                                         isSelected = selectedItems.contains(item),
@@ -867,16 +889,31 @@ private fun VideoChoiceDialog(onDismiss: () -> Unit, onChoose: (builtIn: Boolean
 }
 
 @Composable
-private fun FolderHeader(folder: String, allSelected: Boolean, onToggleSelection: () -> Unit, onPlay: (() -> Unit)?) {
+private fun FolderHeader(
+    folder: String,
+    count: Int,
+    collapsed: Boolean,
+    onToggleCollapse: () -> Unit,
+    allSelected: Boolean,
+    onToggleSelection: () -> Unit,
+    onPlay: (() -> Unit)?
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(start = 16.dp, end = 4.dp)
+            .clickable(onClick = onToggleCollapse)
+            .padding(start = 8.dp, end = 4.dp)
     ) {
+        Icon(
+            if (collapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowDown,
+            contentDescription = if (collapsed) str(R.string.expand) else str(R.string.collapse),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = folder,
+            text = "$folder ($count)",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             maxLines = 2,

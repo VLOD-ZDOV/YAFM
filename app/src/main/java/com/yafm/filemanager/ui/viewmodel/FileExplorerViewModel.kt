@@ -343,6 +343,25 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _selectedItems.value = if (item in current) current - item else current + item
     }
 
+    /** Folded folder headers of the open category, by their shown name. */
+    val collapsedFolders: StateFlow<Set<String>> = combine(settings.settings, _location) { s, loc ->
+        val prefix = "${loc.category?.name}:"
+        s.collapsedFolders.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun toggleFolderCollapsed(folder: String) {
+        val key = "${_location.value.category?.name}:$folder"
+        settings.update { s ->
+            s.copy(collapsedFolders = if (key in s.collapsedFolders) s.collapsedFolders - key else s.collapsedFolders + key)
+        }
+    }
+
+    /** Folds or unfolds every given folder of the open category. */
+    fun setFoldersCollapsed(folders: List<String>, collapsed: Boolean) {
+        val keys = folders.map { "${_location.value.category?.name}:$it" }.toSet()
+        settings.update { s -> s.copy(collapsedFolders = if (collapsed) s.collapsedFolders + keys else s.collapsedFolders - keys) }
+    }
+
     /** A folder's files in a category: selects them all, or clears them when all are already selected. */
     fun toggleGroupSelection(group: List<FileItem>) {
         val current = _selectedItems.value

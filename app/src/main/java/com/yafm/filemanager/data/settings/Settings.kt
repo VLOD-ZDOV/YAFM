@@ -20,7 +20,9 @@ data class Settings(
     /** Seek buttons and double taps in the video player, in seconds. */
     val seekSeconds: Int = 10,
     /** Brightness (left) and volume (right) swipes in the video player. */
-    val videoSideGestures: Boolean = false
+    val videoSideGestures: Boolean = false,
+    /** Folder headers folded in the categories, as "CATEGORY:folder". */
+    val collapsedFolders: Set<String> = emptySet()
 )
 
 class SettingsRepository(context: Context) {
@@ -37,7 +39,8 @@ class SettingsRepository(context: Context) {
         showHidden = prefs.getBoolean("showHidden", false),
         gridView = prefs.getBoolean("gridView", false),
         seekSeconds = prefs.getInt("seekSeconds", 10),
-        videoSideGestures = prefs.getBoolean("videoSideGestures", false)
+        videoSideGestures = prefs.getBoolean("videoSideGestures", false),
+        collapsedFolders = prefs.getStringSet("collapsedFolders", null)?.toSet() ?: emptySet()
     )
 
     private inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
@@ -55,6 +58,7 @@ class SettingsRepository(context: Context) {
             .putBoolean("gridView", s.gridView)
             .putInt("seekSeconds", s.seekSeconds)
             .putBoolean("videoSideGestures", s.videoSideGestures)
+            .putStringSet("collapsedFolders", s.collapsedFolders)
             .apply()
     }
 }
