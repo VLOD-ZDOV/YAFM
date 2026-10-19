@@ -45,6 +45,7 @@ import com.nexus.filemanager.ui.screens.AudioPlayerScreen
 import com.nexus.filemanager.ui.components.UpdateDialog
 import com.nexus.filemanager.ui.components.CodeDialog
 import com.nexus.filemanager.ui.screens.StorageAnalyzerScreen
+import com.nexus.filemanager.ui.screens.DuplicatesScreen
 import com.nexus.filemanager.ui.screens.TextEditorScreen
 import com.nexus.filemanager.ui.theme.NexusFileManagerTheme
 import com.nexus.filemanager.ui.viewmodel.FileExplorerViewModel
@@ -56,6 +57,7 @@ sealed class AppScreen {
     data class ImageViewer(val file: FileItem) : AppScreen()
     data object AppManager : AppScreen()
     data object StorageAnalyzer : AppScreen()
+    data object Duplicates : AppScreen()
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
     data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
@@ -187,6 +189,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     },
                     onOpenAudio = { file, playlist ->
                         currentScreen = AppScreen.AudioPlayer(file, playlist)
+                    },
+                    onOpenDuplicates = {
+                        currentScreen = AppScreen.Duplicates
                     }
                 )
             }
@@ -222,6 +227,17 @@ fun FileManagerApp(viewModel: FileExplorerViewModel) {
                     },
                     onOpenFile = { file ->
                         viewModel.navigateToLocal(java.io.File(file.path).parent ?: "/")
+                        currentScreen = AppScreen.Explorer
+                    }
+                )
+            }
+            is AppScreen.Duplicates -> {
+                DuplicatesScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = AppScreen.Explorer },
+                    onOpenFolder = { folder ->
+                        viewModel.cancelDuplicates()
+                        viewModel.navigateToLocal(folder)
                         currentScreen = AppScreen.Explorer
                     }
                 )

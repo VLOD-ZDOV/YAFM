@@ -323,4 +323,14 @@
     <string name="remove_key">Убрать ключ</string>
     <string name="not_a_private_key">Это не файл закрытого ключа OpenSSH</string>
     <string name="sftp_key_hint">Для SFTP ключ телефона не используется: выберите файл ключа или войдите по паролю.</string>
+    <string name="play_folder">Играть эту папку</string>
+    <string name="select_folder">Выделить файлы папки</string>
+    <string name="find_duplicates">Найти дубликаты</string>
+    <string name="duplicates">Дубликаты</string>
+    <string name="checked_of">Проверено %1$d из %2$d</string>
+    <string name="no_duplicates">Одинаковых файлов нет</string>
+    <string name="duplicates_summary">Групп: %1$d, можно освободить %2$s. Нажмите на файл, чтобы открыть его папку.</string>
+    <string name="mark_extra_copies">Отметить лишние</string>
+    <string name="delete_n">Удалить (%1$d)</string>
+    <string name="cmd_group_processes">Процессы</string>
 </resources>

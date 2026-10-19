@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.filemanager.YafmApp
 import com.nexus.filemanager.data.archive.ArchiveManager
+import com.nexus.filemanager.data.dupes.DuplicateFinder
 import com.nexus.filemanager.data.fs.joinPath
 import com.nexus.filemanager.data.model.FileCategory
 import com.nexus.filemanager.data.model.FileItem
@@ -21,6 +22,7 @@ import com.nexus.filemanager.data.root.RootCommander
 import com.nexus.filemanager.data.update.Release
 import com.nexus.filemanager.data.update.Updater
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,9 +111,19 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _sortMode = MutableStateFlow(SortMode.NAME_ASC)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
+    /** Extensions shown in a category; empty: all of them. */
+    private val _typeFilter = MutableStateFlow<Set<String>>(emptySet())
+    val typeFilter: StateFlow<Set<String>> = _typeFilter.asStateFlow()
+
+    /** Extensions present in the current category with their file counts, most common first. */
+    val availableTypes: StateFlow<List<Pair<String, Int>>> = combine(rawFiles, _location) { files, loc ->
+        if (loc.category == null) emptyList()
+        else files.groupingBy { it.extension }.eachCount().toList().sortedByDescending { it.second }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val fileList: StateFlow<List<FileItem>> =
-        combine(rawFiles, _searchQuery, _showHiddenFiles, _sortMode) { files, query, hidden, sort ->
-            filterAndSort(files, query.trim().lowercase(), hidden, sort)
+        combine(rawFiles, _searchQuery, _showHiddenFiles, _sortMode, _typeFilter) { files, query, hidden, sort, types ->
+            filterAndSort(files.filter { types.isEmpty() || it.extension in types }, query.trim().lowercase(), hidden, sort)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _selectedItems = MutableStateFlow<Set<FileItem>>(emptySet())
@@ -201,6 +213,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         history.addLast(_location.value)
         _location.value = target
         _searchQuery.value = ""
+        _typeFilter.value = emptySet()
         loadCurrentDirectory()
     }
 
@@ -212,6 +225,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         history.clear()
         _location.value = target
         _searchQuery.value = ""
+        _typeFilter.value = emptySet()
         loadCurrentDirectory()
     }
 
@@ -241,6 +255,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         val previous = history.removeLastOrNull() ?: return false
         _location.value = previous
         _searchQuery.value = ""
+        _typeFilter.value = emptySet()
         loadCurrentDirectory()
         return true
     }
@@ -295,6 +310,17 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _sortMode.value = mode
     }
 
+    fun toggleType(extension: String) {
+        val current = _typeFilter.value
+        _typeFilter.value = if (extension in current) current - extension else current + extension
+        _selectedItems.value = emptySet()
+    }
+
+    fun clearTypeFilter() {
+        _typeFilter.value = emptySet()
+        _selectedItems.value = emptySet()
+    }
+
     private fun filterAndSort(items: List<FileItem>, query: String, showHidden: Boolean, sort: SortMode): List<FileItem> {
         val filtered = items.filter { (showHidden || !it.isHidden) && (query.isEmpty() || it.name.lowercase().contains(query)) }
         val dirsFirst = compareBy<FileItem> { !it.isDirectory }
@@ -315,6 +341,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun toggleSelection(item: FileItem) {
         val current = _selectedItems.value
         _selectedItems.value = if (item in current) current - item else current + item
+    }
+
+    /** A folder's files in a category: selects them all, or clears them when all are already selected. */
+    fun toggleGroupSelection(group: List<FileItem>) {
+        val current = _selectedItems.value
+        _selectedItems.value = if (current.containsAll(group)) current - group.toSet() else current + group
     }
 
     fun selectAll() {
@@ -490,6 +522,54 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 .onSuccess { onResult(true, it.ifBlank { str(R.string.paired) }) }
                 .onFailure { onResult(false, describe(it)) }
         }
+    }
+
+    // Duplicates: in the open category, or in the open local folder and all its subfolders.
+
+    /** Null: no search yet. */
+    private val _duplicates = MutableStateFlow<List<List<FileItem>>?>(null)
+    val duplicates: StateFlow<List<List<FileItem>>?> = _duplicates.asStateFlow()
+
+    private val _duplicatesProgress = MutableStateFlow<String?>(null)
+    val duplicatesProgress: StateFlow<String?> = _duplicatesProgress.asStateFlow()
+
+    private var duplicatesJob: Job? = null
+
+    val canFindDuplicates: Boolean
+        get() = _location.value.let { it.category != null || it.type == StorageType.LOCAL }
+
+    fun findDuplicates() {
+        val loc = _location.value
+        val categoryFiles = if (loc.category != null) fileList.value else null
+        val showHidden = _showHiddenFiles.value
+        duplicatesJob?.cancel()
+        _duplicates.value = null
+        duplicatesJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _duplicatesProgress.value = str(R.string.scanning_files)
+            val files = categoryFiles ?: File(loc.path).walkTopDown()
+                .onEnter { (showHidden || !it.name.startsWith(".")) && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
+                .filter { it.isFile && (showHidden || !it.name.startsWith(".")) }
+                .map { FileItem(name = it.name, path = it.absolutePath, size = it.length(), lastModified = it.lastModified()) }
+                .toList()
+            val groups = DuplicateFinder.find(files) { done, total ->
+                ensureActive()
+                if (done % 20 == 0 || done == total) _duplicatesProgress.value = str(R.string.checked_of, done, total)
+            }
+            _duplicates.value = groups
+            _duplicatesProgress.value = null
+        }
+    }
+
+    fun cancelDuplicates() {
+        duplicatesJob?.cancel()
+        _duplicatesProgress.value = null
+        _duplicates.value = null
+    }
+
+    fun deleteDuplicates(items: List<FileItem>) {
+        val gone = items.toSet()
+        _duplicates.value = _duplicates.value?.map { it - gone }?.filter { it.size > 1 }
+        deleteItems(items)
     }
 
     // Updates from GitHub releases

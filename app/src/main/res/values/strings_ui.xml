@@ -323,4 +323,14 @@
     <string name="remove_key">Remove the key</string>
     <string name="not_a_private_key">This is not an OpenSSH private key file</string>
     <string name="sftp_key_hint">For SFTP the phone\'s own key is not used: pick a key file, or sign in with the password.</string>
+    <string name="play_folder">Play this folder</string>
+    <string name="select_folder">Select the folder\'s files</string>
+    <string name="find_duplicates">Find duplicates</string>
+    <string name="duplicates">Duplicates</string>
+    <string name="checked_of">Checked %1$d of %2$d</string>
+    <string name="no_duplicates">No identical files</string>
+    <string name="duplicates_summary">%1$d groups, %2$s can be freed. Tap a file to open its folder.</string>
+    <string name="mark_extra_copies">Mark extra copies</string>
+    <string name="delete_n">Delete (%1$d)</string>
+    <string name="cmd_group_processes">Processes</string>
 </resources>

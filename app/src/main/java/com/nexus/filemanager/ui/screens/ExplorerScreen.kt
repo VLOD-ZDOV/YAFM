@@ -65,6 +65,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.PlayArrow
 import com.nexus.filemanager.data.settings.VideoPlayer
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -113,7 +119,8 @@ fun ExplorerScreen(
     onOpenFileInEditor: (FileItem) -> Unit,
     onOpenImage: (FileItem) -> Unit,
     onOpenVideo: (java.io.File, List<java.io.File>) -> Unit,
-    onOpenAudio: (java.io.File, List<java.io.File>) -> Unit
+    onOpenAudio: (java.io.File, List<java.io.File>) -> Unit,
+    onOpenDuplicates: () -> Unit
 ) {
     val context = LocalContext.current
     val currentPath by viewModel.currentPath.collectAsState()
@@ -150,6 +157,8 @@ fun ExplorerScreen(
     val archiveProgress by viewModel.archiveProgress.collectAsState()
     val isArchiveProcessing by viewModel.isArchiveProcessing.collectAsState()
     val progress by viewModel.progress.collectAsState()
+    val typeFilter by viewModel.typeFilter.collectAsState()
+    val availableTypes by viewModel.availableTypes.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -182,10 +191,13 @@ fun ExplorerScreen(
         }
     }
 
+    // The queue is the tracks of the item's own folder, also in a category gathered from many folders.
     fun playAudio(item: FileItem) {
         viewModel.withLocalCopy(item) { file ->
+            val folder = item.path.substringBeforeLast('/')
             val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
-                fileList.filter { it.category == FileCategory.AUDIO }.map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
+                fileList.filter { it.category == FileCategory.AUDIO && it.path.substringBeforeLast('/') == folder }
+                    .map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
             } else listOf(file)
             onOpenAudio(file, playlist)
         }
@@ -483,6 +495,25 @@ fun ExplorerScreen(
                                     showMoreMenu = false
                                 }
                             )
+                            if (location.category == null && fileList.any { it.category == FileCategory.AUDIO }) {
+                                DropdownMenuItem(
+                                    text = { Text(str(R.string.play_folder)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        fileList.firstOrNull { it.category == FileCategory.AUDIO }?.let { playAudio(it) }
+                                    }
+                                )
+                            }
+                            if (viewModel.canFindDuplicates) {
+                                DropdownMenuItem(
+                                    text = { Text(str(R.string.find_duplicates)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.findDuplicates()
+                                        onOpenDuplicates()
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(str(R.string.refresh)) },
                                 onClick = {
@@ -628,6 +659,26 @@ fun ExplorerScreen(
                 }
             )
 
+            // A category can be narrowed to some of its file types (pdf + docx, flac only...).
+            if (location.category != null && availableTypes.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(selected = typeFilter.isEmpty(), onClick = { viewModel.clearTypeFilter() }, label = { Text(str(R.string.all)) })
+                    availableTypes.forEach { (ext, count) ->
+                        FilterChip(
+                            selected = ext in typeFilter,
+                            onClick = { viewModel.toggleType(ext) },
+                            label = { Text("${ext.ifEmpty { "?" }} ($count)") }
+                        )
+                    }
+                }
+            }
+
             // Content Area
             Box(
                 modifier = Modifier
@@ -703,7 +754,14 @@ fun ExplorerScreen(
                         ) {
                             sections.forEach { (folder, group) ->
                                 if (folder != null) {
-                                    item(key = "folder:$folder", span = { GridItemSpan(maxLineSpan) }) { FolderHeader(folder) }
+                                    item(key = "folder:$folder", span = { GridItemSpan(maxLineSpan) }) {
+                                    FolderHeader(
+                                        folder = folder,
+                                        allSelected = selectedItems.containsAll(group),
+                                        onToggleSelection = { viewModel.toggleGroupSelection(group) },
+                                        onPlay = if (location.category == FileCategory.AUDIO) ({ playAudio(group.first()) }) else null
+                                    )
+                                }
                                 }
                                 items(group, key = { it.path }) { item ->
                                     FileGridItem(
@@ -724,7 +782,14 @@ fun ExplorerScreen(
                         ) {
                             sections.forEach { (folder, group) ->
                                 if (folder != null) {
-                                    item(key = "folder:$folder") { FolderHeader(folder) }
+                                    item(key = "folder:$folder") {
+                                    FolderHeader(
+                                        folder = folder,
+                                        allSelected = selectedItems.containsAll(group),
+                                        onToggleSelection = { viewModel.toggleGroupSelection(group) },
+                                        onPlay = if (location.category == FileCategory.AUDIO) ({ playAudio(group.first()) }) else null
+                                    )
+                                }
                                 }
                                 items(group, key = { it.path }) { item ->
                                     FileListItem(
@@ -802,16 +867,33 @@ private fun VideoChoiceDialog(onDismiss: () -> Unit, onChoose: (builtIn: Boolean
 }
 
 @Composable
-private fun FolderHeader(folder: String) {
-    Text(
-        text = folder,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
+private fun FolderHeader(folder: String, allSelected: Boolean, onToggleSelection: () -> Unit, onPlay: (() -> Unit)?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    )
+            .padding(start = 16.dp, end = 4.dp)
+    ) {
+        Text(
+            text = folder,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (onPlay != null) {
+            IconButton(onClick = onPlay) {
+                Icon(Icons.Default.PlayArrow, contentDescription = str(R.string.play_folder), tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+        IconButton(onClick = onToggleSelection) {
+            Icon(
+                if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                contentDescription = str(R.string.select_folder),
+                tint = if (allSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
