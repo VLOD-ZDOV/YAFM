@@ -1,6 +1,10 @@
 package com.yafm.filemanager.data.audio
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.Player
+import com.yafm.filemanager.MainActivity
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -19,7 +23,18 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+            // The queue goes round: Next on the last track plays the first one.
+            .apply { repeatMode = Player.REPEAT_MODE_ALL }
+        // Tapping the notification opens the player screen.
+        val open = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_PLAYER, true)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         session = MediaSession.Builder(this, player)
+            .setSessionActivity(open)
             .setCallback(object : MediaSession.Callback {
                 // The service is exported for the system's media controls; other apps get no access,
                 // since a controller could queue any file this app can read and see what is playing.

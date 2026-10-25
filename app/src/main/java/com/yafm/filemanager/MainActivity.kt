@@ -49,6 +49,7 @@ import com.yafm.filemanager.ui.screens.DuplicatesScreen
 import com.yafm.filemanager.ui.screens.TextEditorScreen
 import com.yafm.filemanager.ui.theme.YafmTheme
 import com.yafm.filemanager.ui.viewmodel.FileExplorerViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 sealed class AppScreen {
     data object Home : AppScreen()
@@ -61,12 +62,25 @@ sealed class AppScreen {
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
     data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
-    data class AudioPlayer(val file: java.io.File, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
+    /** No [file]: shows what is already playing. */
+    data class AudioPlayer(val file: java.io.File?, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: FileExplorerViewModel by viewModels()
+
+    /** Set by a tap on the music notification. */
+    private val openPlayer = MutableStateFlow(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) openPlayer.value = true
+    }
+
+    companion object {
+        const val EXTRA_OPEN_PLAYER = "open_player"
+    }
 
     private val legacyPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -91,6 +105,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         checkAndRequestStoragePermissions()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) openPlayer.value = true
 
         val settings = (application as YafmApp).settings
         setContent {
@@ -100,7 +115,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FileManagerApp(viewModel = viewModel)
+                    FileManagerApp(viewModel = viewModel, openPlayer = openPlayer)
                 }
             }
         }
@@ -135,8 +150,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun FileManagerApp(viewModel: FileExplorerViewModel) {
+fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlow<Boolean>) {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
+
+    val playerRequested by openPlayer.collectAsState()
+    LaunchedEffect(playerRequested) {
+        if (playerRequested) {
+            openPlayer.value = false
+            val screen = currentScreen
+            if (screen !is AppScreen.AudioPlayer) currentScreen = AppScreen.AudioPlayer(null, emptyList(), back = screen)
+        }
+    }
 
     LaunchedEffect(Unit) { viewModel.checkForUpdates(manual = false) }
     UpdateDialog(viewModel)

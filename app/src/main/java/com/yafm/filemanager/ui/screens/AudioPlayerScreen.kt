@@ -16,6 +16,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextAlign
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -75,7 +80,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioPlayerScreen(
-    file: File,
+    file: File?,
     playlist: List<File>,
     onNavigateBack: () -> Unit
 ) {
@@ -87,8 +92,8 @@ fun AudioPlayerScreen(
     var meta by remember { mutableStateOf(MediaMetadata.EMPTY) }
     var index by remember { mutableIntStateOf(0) }
     var shuffle by remember { mutableStateOf(false) }
-    var repeat by remember { mutableIntStateOf(Player.REPEAT_MODE_OFF) }
-    val queue = remember(playlist, file) { playlist.ifEmpty { listOf(file) } }
+    var repeat by remember { mutableIntStateOf(Player.REPEAT_MODE_ALL) }
+    var queue by remember(playlist, file) { mutableStateOf(if (file == null) emptyList() else playlist.ifEmpty { listOf(file) }) }
 
     BackHandler(onBack = onNavigateBack)
 
@@ -109,6 +114,12 @@ fun AudioPlayerScreen(
             val c = future.get()
             controller = c
             c.addListener(listener)
+            if (file == null) {
+                // Opened from the notification: show the queue that plays.
+                queue = (0 until c.mediaItemCount).map { File(c.getMediaItemAt(it).mediaId) }
+                listener.onEvents(c, Player.Events(androidx.media3.common.FlagSet.Builder().build()))
+                return@addListener
+            }
             val items = queue.map { f ->
                 MediaItem.Builder()
                     .setMediaId(f.absolutePath)
@@ -142,6 +153,126 @@ fun AudioPlayerScreen(
         meta.artworkData?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
 
+    @Composable
+    fun Cover(modifier: Modifier) {
+        Box(
+            modifier = modifier
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            if (art != null) {
+                Image(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+
+    @Composable
+    fun Controls() {
+        // Fixed heights: a long title or a missing artist must not move the buttons.
+        Text(
+            meta.title?.toString() ?: queue.getOrNull(index)?.nameWithoutExtension ?: "",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            listOfNotNull(meta.artist, meta.albumTitle).joinToString(" — "),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            minLines = 1,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(8.dp))
+
+        var sliding by remember { mutableStateOf<Float?>(null) }
+        Slider(
+            value = sliding ?: position.toFloat().coerceAtMost(duration.toFloat()),
+            onValueChange = { sliding = it },
+            onValueChangeFinished = { sliding?.let { controller?.seekTo(it.toLong()) }; sliding = null },
+            valueRange = 0f..maxOf(duration.toFloat(), 1f)
+        )
+        Row(Modifier.fillMaxWidth()) {
+            Text(formatClock(sliding?.toLong() ?: position), style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.weight(1f))
+            Text(formatClock(duration), style = MaterialTheme.typography.bodySmall)
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)
+        ) {
+            IconButton(onClick = { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }) {
+                Icon(
+                    Icons.Default.Shuffle,
+                    contentDescription = str(R.string.shuffle),
+                    tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = { controller?.seekToPrevious() }) {
+                Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous), modifier = Modifier.size(36.dp))
+            }
+            FilledIconButton(
+                onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                modifier = Modifier.size(64.dp)
+            ) {
+                Icon(
+                    if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playing) str(R.string.pause) else str(R.string.play),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            IconButton(onClick = { controller?.seekToNext() }) {
+                Icon(Icons.Default.SkipNext, contentDescription = str(R.string.next), modifier = Modifier.size(36.dp))
+            }
+            IconButton(onClick = {
+                controller?.let {
+                    it.repeatMode = when (it.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                        else -> Player.REPEAT_MODE_OFF
+                    }
+                }
+            }) {
+                Icon(
+                    if (repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                    contentDescription = str(R.string.repeat),
+                    tint = if (repeat != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun Queue(modifier: Modifier) {
+        LazyColumn(modifier = modifier.fillMaxWidth()) {
+            itemsIndexed(queue) { i, f ->
+                Text(
+                    f.nameWithoutExtension,
+                    color = if (i == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (i == index) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { controller?.seekTo(i, 0L); controller?.play() }
+                        .padding(vertical = 10.dp)
+                )
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -154,112 +285,35 @@ fun AudioPlayerScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (art != null) {
-                    Image(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Text(
-                meta.title?.toString() ?: queue.getOrNull(index)?.nameWithoutExtension ?: "",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            listOfNotNull(meta.artist, meta.albumTitle).joinToString(" — ").takeIf { it.isNotEmpty() }?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-            Spacer(Modifier.height(8.dp))
-
-            var sliding by remember { mutableStateOf<Float?>(null) }
-            Slider(
-                value = sliding ?: position.toFloat().coerceAtMost(duration.toFloat()),
-                onValueChange = { sliding = it },
-                onValueChangeFinished = { sliding?.let { controller?.seekTo(it.toLong()) }; sliding = null },
-                valueRange = 0f..maxOf(duration.toFloat(), 1f)
-            )
-            Row(Modifier.fillMaxWidth()) {
-                Text(formatClock(sliding?.toLong() ?: position), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.weight(1f))
-                Text(formatClock(duration), style = MaterialTheme.typography.bodySmall)
-            }
-
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (landscape) {
+            // Landscape: the cover on the left, sized by the height; controls and queue on the right.
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                IconButton(onClick = { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }) {
-                    Icon(
-                        Icons.Default.Shuffle,
-                        contentDescription = str(R.string.shuffle),
-                        tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = { controller?.seekToPrevious() }) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous), modifier = Modifier.size(36.dp))
-                }
-                FilledIconButton(
-                    onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) str(R.string.pause) else str(R.string.play),
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-                IconButton(onClick = { controller?.seekToNext() }) {
-                    Icon(Icons.Default.SkipNext, contentDescription = str(R.string.next), modifier = Modifier.size(36.dp))
-                }
-                IconButton(onClick = {
-                    controller?.let {
-                        it.repeatMode = when (it.repeatMode) {
-                            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                            else -> Player.REPEAT_MODE_OFF
-                        }
-                    }
-                }) {
-                    Icon(
-                        if (repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                        contentDescription = str(R.string.repeat),
-                        tint = if (repeat != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Cover(Modifier.fillMaxHeight())
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Controls()
+                    Queue(Modifier.weight(1f))
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                itemsIndexed(queue) { i, f ->
-                    Text(
-                        f.nameWithoutExtension,
-                        color = if (i == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (i == index) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { controller?.seekTo(i, 0L); controller?.play() }
-                            .padding(vertical = 10.dp)
-                    )
-                }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Cover(Modifier.fillMaxWidth(0.7f))
+                Spacer(Modifier.height(16.dp))
+                Controls()
+                Spacer(Modifier.height(8.dp))
+                Queue(Modifier.weight(1f))
             }
         }
     }
