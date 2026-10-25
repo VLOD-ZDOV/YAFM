@@ -2,12 +2,11 @@ package com.yafm.filemanager.ui.components
 
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
-import java.io.File
-import com.yafm.filemanager.ui.thumbs.AudioCover
+import com.yafm.filemanager.ui.thumbs.Thumbnail
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
-import coil.request.videoFrameMillis
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -137,18 +136,20 @@ fun FileListItem(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (item.formattedSize().isNotEmpty()) {
+                    val size = item.formattedSize()
+                    val date = note ?: item.formattedDate()
+                    if (size.isNotEmpty()) {
                         Text(
-                            text = item.formattedSize(),
+                            text = size,
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
 
-                    if (note != null || item.formattedDate().isNotEmpty()) {
+                    if (date.isNotEmpty()) {
                         Text(
-                            text = note ?: item.formattedDate(),
+                            text = date,
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -278,12 +279,13 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier, fill: Boolean = fals
             }
             if (preview) {
                 val context = LocalContext.current
-                val request = remember(item.path, item.lastModified) {
+                // A list row needs its 40 dp in pixels, not more; grid tiles keep 256 px.
+                val px = if (fill) 256 else minOf(with(LocalDensity.current) { 40.dp.roundToPx() }, 256)
+                val request = remember(item.path, item.lastModified, px) {
                     ImageRequest.Builder(context)
-                        .data(if (item.category == FileCategory.AUDIO) AudioCover(item.path) else File(item.path))
-                        .size(256)
-                        .videoFrameMillis(1000)
-                        .memoryCacheKey("thumb:${item.path}:${item.lastModified}")
+                        .data(Thumbnail(item.path, item.lastModified, item.category == FileCategory.AUDIO, px))
+                        .size(px)
+                        .memoryCacheKey("thumb:${item.path}:${item.lastModified}:$px")
                         .build()
                 }
                 AsyncImage(

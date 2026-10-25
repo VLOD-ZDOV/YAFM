@@ -98,9 +98,10 @@ fun FileGridItem(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                if (item.formattedSize().isNotEmpty()) {
+                val size = item.formattedSize()
+                if (size.isNotEmpty()) {
                     Text(
-                        text = item.formattedSize(),
+                        text = size,
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 10.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

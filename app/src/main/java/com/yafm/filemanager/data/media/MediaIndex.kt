@@ -40,12 +40,8 @@ class MediaIndex(private val context: Context) {
             "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
         )?.use { c ->
             while (c.moveToNext()) {
-                val raw = c.getString(0) ?: continue
-                // Index rows are not trusted: "home/../.." would pass the LIKE above. Only real files
-                // inside internal storage count (the index may also still list deleted ones).
-                val file = runCatching { File(raw).canonicalFile }.getOrNull() ?: continue
+                val file = inHome(c.getString(0) ?: continue) ?: continue
                 val path = file.path
-                if (!path.startsWith(homeCanonical + File.separator) || !file.isFile) continue
                 items += FileItem(
                     name = file.name,
                     path = path,
@@ -78,10 +74,8 @@ class MediaIndex(private val context: Context) {
             "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
         )?.use { cursor ->
             while (cursor.moveToNext() && items.size < limit) {
-                val raw = cursor.getString(0) ?: continue
-                val file = runCatching { File(raw).canonicalFile }.getOrNull() ?: continue
+                val file = inHome(cursor.getString(0) ?: continue) ?: continue
                 val path = file.path
-                if (!path.startsWith(homeCanonical + File.separator) || !file.isFile) continue
                 val relative = path.removePrefix(homeCanonical)
                 if (relative.contains("/.") || relative.startsWith("/Android/")) continue
                 items += FileItem(
@@ -96,6 +90,19 @@ class MediaIndex(private val context: Context) {
         }
         // Newest event first, whether the file came or changed.
         return items.sortedByDescending { maxOf(it.lastModified, it.added) }
+    }
+
+    /**
+     * The file an index row names, if it is a real file inside internal storage (the index may still
+     * list deleted ones). Rows are not trusted: "home/../.." would pass the LIKE queries. A plain path
+     * inside home is taken as it is; anything else is canonicalized, which costs an lstat per part.
+     */
+    private fun inHome(raw: String): File? {
+        val prefix = homeCanonical + File.separator
+        val plain = raw.startsWith(prefix) && "/./" !in raw && "/../" !in raw && "//" !in raw &&
+            !raw.endsWith("/.") && !raw.endsWith("/..")
+        val file = if (plain) File(raw) else runCatching { File(raw).canonicalFile }.getOrNull() ?: return null
+        return file.takeIf { it.path.startsWith(prefix) && it.isFile }
     }
 
     private fun mediaType(type: Int) = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?" to arrayOf(type.toString())
