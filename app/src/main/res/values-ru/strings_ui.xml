@@ -377,4 +377,5 @@
     <string name="incoming_copy_hint">Приложение дало только копию файла: сохраните её, чтобы она не пропала.</string>
     <string name="show_in_folder">Показать в папке</string>
     <string name="save_to_downloads">Сохранить в Загрузки</string>
+    <string name="cannot_open_this_file">Этот файл здесь не открыть</string>
 </resources>

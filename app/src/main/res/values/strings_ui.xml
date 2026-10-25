@@ -377,4 +377,5 @@
     <string name="incoming_copy_hint">The app gave only a copy of the file: save it to keep it.</string>
     <string name="show_in_folder">Show in its folder</string>
     <string name="save_to_downloads">Save to Download</string>
+    <string name="cannot_open_this_file">This file cannot be opened here</string>
 </resources>
