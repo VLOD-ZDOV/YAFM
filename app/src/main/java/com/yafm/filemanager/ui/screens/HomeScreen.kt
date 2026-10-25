@@ -11,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Close
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +135,7 @@ fun HomeScreen(
     val categories = remember {
         val root = Environment.getExternalStorageDirectory().absolutePath
         listOf(
+            CategoryItem(str(R.string.recent), Icons.Default.History, BluePrimary, root, FileCategory.RECENT),
             CategoryItem(str(R.string.downloads), Icons.Default.Download, BluePrimary, "$root/Download"),
             CategoryItem(str(R.string.images), Icons.Default.Image, ImageColor, root, FileCategory.IMAGE),
             CategoryItem(str(R.string.videos), Icons.Default.Movie, VideoColor, root, FileCategory.VIDEO),
@@ -278,35 +280,24 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    categories.take(3).forEach { cat ->
-                        CategoryCard(
-                            category = cat,
-                            onClick = {
-                                cat.category?.let { viewModel.openCategory(it) } ?: viewModel.navigateToLocal(cat.path)
-                                onNavigateToExplorer()
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    categories.drop(3).take(3).forEach { cat ->
-                        CategoryCard(
-                            category = cat,
-                            onClick = {
-                                cat.category?.let { viewModel.openCategory(it) } ?: viewModel.navigateToLocal(cat.path)
-                                onNavigateToExplorer()
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
+                categories.chunked(3).forEachIndexed { row, cats ->
+                    if (row > 0) Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        cats.forEach { cat ->
+                            CategoryCard(
+                                category = cat,
+                                onClick = {
+                                    cat.category?.let { viewModel.openCategory(it) } ?: viewModel.navigateToLocal(cat.path)
+                                    onNavigateToExplorer()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        // A short last row keeps the cards the same size.
+                        repeat(3 - cats.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
             }

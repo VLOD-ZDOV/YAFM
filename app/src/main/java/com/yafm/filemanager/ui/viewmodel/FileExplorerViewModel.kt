@@ -368,6 +368,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         FileCategory.AUDIO -> str(R.string.all_music)
         FileCategory.DOCUMENT -> str(R.string.all_documents)
         FileCategory.ARCHIVE -> str(R.string.all_archives)
+        FileCategory.RECENT -> str(R.string.recent)
         else -> category.name
     }
 
@@ -780,6 +781,42 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
          * Files of a category grouped by folder (shown relative to [root]), folders in name order,
          * each keeping the files' order.
          */
+        /** How a category screen is split: recent files by day, the other categories by folder. */
+        fun sections(items: List<FileItem>, location: Location): List<Pair<String?, List<FileItem>>> = when (location.category) {
+            null -> listOf(null to items)
+            FileCategory.RECENT -> groupByDay(items)
+            else -> groupByFolder(items, location.path)
+        }
+
+        /** Newest first, under "Today", "Yesterday" or the date. */
+        fun groupByDay(items: List<FileItem>, now: Long = System.currentTimeMillis()): List<Pair<String?, List<FileItem>>> {
+            val cal = java.util.Calendar.getInstance()
+            fun day(ms: Long): Int {
+                cal.timeInMillis = ms
+                return cal.get(java.util.Calendar.YEAR) * 1000 + cal.get(java.util.Calendar.DAY_OF_YEAR)
+            }
+            val today = day(now)
+            val yesterday = day(now - 86_400_000L)
+            val format = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault())
+            return items.sortedByDescending { maxOf(it.lastModified, it.added) }
+                .groupBy { day(maxOf(it.lastModified, it.added)) }
+                .map { (d, group) ->
+                    val title = when (d) {
+                        today -> str(R.string.today)
+                        yesterday -> str(R.string.yesterday)
+                        else -> format.format(java.util.Date(maxOf(group[0].lastModified, group[0].added)))
+                    }
+                    title to group
+                }
+        }
+
+        /** "Added 19:40 · Download/Telegram": what happened to a recent file, when, and its folder. */
+        fun recentNote(item: FileItem, root: String): String {
+            val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(maxOf(item.lastModified, item.added)))
+            val folder = item.path.substringBeforeLast('/').removePrefix(root).trimStart('/').ifEmpty { "/" }
+            return "${str(if (item.isNew) R.string.added else R.string.changed)} $time · $folder"
+        }
+
         fun groupByFolder(items: List<FileItem>, root: String): List<Pair<String?, List<FileItem>>> =
             items.groupBy { it.path.substringBeforeLast('/', "") }
                 .toSortedMap(String.CASE_INSENSITIVE_ORDER)

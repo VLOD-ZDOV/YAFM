@@ -15,6 +15,7 @@ class MediaIndex(private val context: Context) {
     private val homeCanonical = File(home).canonicalPath
 
     fun query(category: FileCategory): List<FileItem> {
+        if (category == FileCategory.RECENT) return recent()
         val (selection, args) = when (category) {
             FileCategory.IMAGE -> mediaType(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE)
             FileCategory.VIDEO -> mediaType(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
@@ -55,6 +56,46 @@ class MediaIndex(private val context: Context) {
             }
         }
         return items
+    }
+
+    /**
+     * Files added or changed in the last [days] days, newest first: downloads, saved pictures, edits.
+     * Hidden files and app folders (Android/data...) are left out; at most [limit] files.
+     */
+    private fun recent(days: Int = 30, limit: Int = 1000): List<FileItem> {
+        val since = System.currentTimeMillis() / 1000 - days * 86_400L
+        val items = mutableListOf<FileItem>()
+        context.contentResolver.query(
+            MediaStore.Files.getContentUri("external"),
+            arrayOf(
+                MediaStore.Files.FileColumns.DATA, MediaStore.Files.FileColumns.SIZE,
+                MediaStore.Files.FileColumns.DATE_MODIFIED, MediaStore.Files.FileColumns.DATE_ADDED
+            ),
+            // A folder has no MIME type in the index.
+            "${MediaStore.Files.FileColumns.DATA} LIKE ? AND ${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL AND " +
+                "(${MediaStore.Files.FileColumns.DATE_MODIFIED} > ? OR ${MediaStore.Files.FileColumns.DATE_ADDED} > ?)",
+            arrayOf("$home/%", since.toString(), since.toString()),
+            "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        )?.use { cursor ->
+            while (cursor.moveToNext() && items.size < limit) {
+                val raw = cursor.getString(0) ?: continue
+                val file = runCatching { File(raw).canonicalFile }.getOrNull() ?: continue
+                val path = file.path
+                if (!path.startsWith(homeCanonical + File.separator) || !file.isFile) continue
+                val relative = path.removePrefix(homeCanonical)
+                if (relative.contains("/.") || relative.startsWith("/Android/")) continue
+                items += FileItem(
+                    name = file.name,
+                    path = path,
+                    size = cursor.getLong(1),
+                    lastModified = cursor.getLong(2) * 1000L,
+                    storageType = StorageType.LOCAL,
+                    added = cursor.getLong(3) * 1000L
+                )
+            }
+        }
+        // Newest event first, whether the file came or changed.
+        return items.sortedByDescending { maxOf(it.lastModified, it.added) }
     }
 
     private fun mediaType(type: Int) = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?" to arrayOf(type.toString())

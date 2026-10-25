@@ -554,7 +554,7 @@ fun ExplorerScreen(
                                 )
                             }
                             if (location.category != null) {
-                                val folders = FileExplorerViewModel.groupByFolder(fileList, location.path).mapNotNull { it.first }
+                                val folders = FileExplorerViewModel.sections(fileList, location).mapNotNull { it.first }
                                 val allCollapsed = folders.isNotEmpty() && collapsedFolders.containsAll(folders)
                                 DropdownMenuItem(
                                     text = { Text(if (allCollapsed) str(R.string.expand_all) else str(R.string.collapse_all)) },
@@ -809,10 +809,7 @@ fun ExplorerScreen(
                 } else {
                     fun onItemClick(item: FileItem) = if (isSelectionMode) viewModel.toggleSelection(item) else openItem(item)
                     // A category gathers files from many folders: they come grouped, each under its folder.
-                    val sections = remember(fileList, location) {
-                        if (location.category != null) FileExplorerViewModel.groupByFolder(fileList, location.path)
-                        else listOf(null to fileList)
-                    }
+                    val sections = remember(fileList, location) { FileExplorerViewModel.sections(fileList, location) }
                     if (isGridView) {
                         LazyVerticalGrid(
                             state = gridState,
@@ -879,7 +876,8 @@ fun ExplorerScreen(
                                         onRename = { renameTarget = item },
                                         onDelete = { deleteConfirmTargets = listOf(item) },
                                         onPermissions = { permissionsTarget = item },
-                                        onDetails = { detailsTarget = item }
+                                        onDetails = { detailsTarget = item },
+                                        note = if (location.category == FileCategory.RECENT) FileExplorerViewModel.recentNote(item, location.path) else null
                                     )
                                 }
                             }

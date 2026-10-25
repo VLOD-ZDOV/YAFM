@@ -82,6 +82,8 @@ fun FileListItem(
     onDelete: () -> Unit,
     onPermissions: () -> Unit,
     onDetails: () -> Unit,
+    /** Replaces the date: what happened to the file and where it is (the recent files list). */
+    note: String? = null,
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -144,11 +146,14 @@ fun FileListItem(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
 
-                    if (item.formattedDate().isNotEmpty()) {
+                    if (note != null || item.formattedDate().isNotEmpty()) {
                         Text(
-                            text = item.formattedDate(),
+                            text = note ?: item.formattedDate(),
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -238,7 +243,7 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier, fill: Boolean = fals
         FileCategory.APK -> Pair(Icons.Default.Android, ApkColor)
         FileCategory.CODE -> Pair(Icons.Default.Code, CodeColor)
         FileCategory.TEXT -> Pair(Icons.AutoMirrored.Filled.Article, TextColor)
-        FileCategory.OTHER -> Pair(Icons.AutoMirrored.Filled.InsertDriveFile, TextColor)
+        FileCategory.OTHER, FileCategory.RECENT -> Pair(Icons.AutoMirrored.Filled.InsertDriveFile, TextColor)
     }
 
     // Previews only for files the app can read directly; remote and root files keep the icon.

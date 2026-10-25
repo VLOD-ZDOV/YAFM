@@ -15,7 +15,9 @@ enum class FileCategory {
     APK,
     CODE,
     TEXT,
-    OTHER
+    OTHER,
+    /** Not a kind of file: the files added or changed lately, as a category screen. */
+    RECENT
 }
 
 data class FileItem(
@@ -30,8 +32,14 @@ data class FileItem(
     val storageType: StorageType = StorageType.LOCAL,
     val serverId: String? = null,
     /** A symbolic link; `isDirectory` then tells what it points to. Recursive operations never follow it. */
-    val isSymlink: Boolean = false
+    val isSymlink: Boolean = false,
+    /** When the media index first saw the file (ms); 0 if unknown. */
+    val added: Long = 0L
 ) {
+    /** Added and not changed since (a download, a new photo), as opposed to changed later. */
+    val isNew: Boolean
+        get() = added > 0 && lastModified - added < 60_000
+
     val extension: String
         get() = if (isDirectory) "" else name.substringAfterLast('.', "").lowercase()
 

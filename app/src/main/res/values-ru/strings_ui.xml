@@ -381,4 +381,9 @@
     <string name="remove_metadata">Удалить метаданные</string>
     <string name="remove_metadata_hint">Из фото (%1$d шт., JPEG, PNG, WebP) удалятся дата и место съёмки, модель телефона и комментарии. Сами картинки не изменятся. Отменить нельзя.</string>
     <string name="metadata_removed">Метаданные удалены из фото: %1$d</string>
+    <string name="recent">Недавние</string>
+    <string name="today">Сегодня</string>
+    <string name="yesterday">Вчера</string>
+    <string name="added">Добавлен</string>
+    <string name="changed">Изменён</string>
 </resources>

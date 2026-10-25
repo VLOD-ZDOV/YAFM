@@ -381,4 +381,9 @@
     <string name="remove_metadata">Remove metadata</string>
     <string name="remove_metadata_hint">The date and place of the shot, the phone model and comments are removed from %1$d photos (JPEG, PNG, WebP). The pictures stay the same. This cannot be undone.</string>
     <string name="metadata_removed">Metadata removed from %1$d photos</string>
+    <string name="recent">Recent</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="added">Added</string>
+    <string name="changed">Changed</string>
 </resources>
