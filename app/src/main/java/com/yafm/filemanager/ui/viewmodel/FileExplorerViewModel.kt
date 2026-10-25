@@ -105,14 +105,14 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _showHiddenFiles = MutableStateFlow(settings.settings.value.showHidden)
     val showHiddenFiles: StateFlow<Boolean> = _showHiddenFiles.asStateFlow()
 
-    private val _isGridView = MutableStateFlow(settings.settings.value.gridView)
+    private val _isGridView = MutableStateFlow(savedGrid(_location.value))
     val isGridView: StateFlow<Boolean> = _isGridView.asStateFlow()
 
     /** Each folder, category and server folder keeps its own sort order; NAME_ASC is not stored. */
     private fun sortKey(loc: Location) = loc.category?.let { "category:${it.name}" }
         ?: "${loc.type.name}:${loc.server?.id ?: ""}:${loc.path}"
 
-    private fun savedSort(loc: Location) = settings.folderSort(sortKey(loc))
+    private fun savedSort(loc: Location) = settings.folderPref(sortKey(loc))
         ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() } ?: SortMode.NAME_ASC
 
     private val _sortMode = MutableStateFlow(savedSort(_location.value))
@@ -130,7 +130,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     val fileList: StateFlow<List<FileItem>> =
         combine(rawFiles, _searchQuery, _showHiddenFiles, _sortMode, _typeFilter) { files, query, hidden, sort, types ->
-            filterAndSort(files.filter { types.isEmpty() || it.extension in types }, query.trim().lowercase(), hidden, sort)
+            // A remembered type may be gone from the folder: it must not hide everything.
+            val shown = types.intersect(files.mapTo(HashSet()) { it.extension })
+            filterAndSort(files.filter { shown.isEmpty() || it.extension in shown }, query.trim().lowercase(), hidden, sort)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _selectedItems = MutableStateFlow<Set<FileItem>>(emptySet())
@@ -228,8 +230,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private fun show(target: Location) {
         _location.value = target
         _searchQuery.value = ""
-        _typeFilter.value = emptySet()
+        _typeFilter.value = savedTypes(target)
         _sortMode.value = savedSort(target)
+        _isGridView.value = savedGrid(target)
     }
 
     /** Entering the explorer from outside: history starts over, so Back from here returns to where it came from. */
@@ -309,25 +312,37 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         settings.update { it.copy(showHidden = _showHiddenFiles.value) }
     }
 
+    /** The view is kept per folder; folders never switched follow the settings' default. */
     fun toggleGridView() {
         _isGridView.value = !_isGridView.value
-        settings.update { it.copy(gridView = _isGridView.value) }
+        settings.setFolderPref("grid|" + sortKey(_location.value), _isGridView.value.toString())
     }
+
+    private fun savedGrid(loc: Location) =
+        settings.folderPref("grid|" + sortKey(loc))?.toBooleanStrictOrNull() ?: settings.settings.value.gridView
+
+    private fun savedTypes(loc: Location) =
+        settings.folderPref("types|" + sortKey(loc))?.split(',')?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    private fun saveTypes() =
+        settings.setFolderPref("types|" + sortKey(_location.value), _typeFilter.value.joinToString(",").ifEmpty { null })
 
     fun setSortMode(mode: SortMode) {
         _sortMode.value = mode
-        settings.setFolderSort(sortKey(_location.value), mode.name.takeIf { mode != SortMode.NAME_ASC })
+        settings.setFolderPref(sortKey(_location.value), mode.name.takeIf { mode != SortMode.NAME_ASC })
     }
 
     fun toggleType(extension: String) {
         val current = _typeFilter.value
         _typeFilter.value = if (extension in current) current - extension else current + extension
         _selectedItems.value = emptySet()
+        saveTypes()
     }
 
     fun clearTypeFilter() {
         _typeFilter.value = emptySet()
         _selectedItems.value = emptySet()
+        saveTypes()
     }
 
     private fun filterAndSort(items: List<FileItem>, query: String, showHidden: Boolean, sort: SortMode): List<FileItem> {

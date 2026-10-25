@@ -46,14 +46,14 @@ class SettingsRepository(context: Context) {
         advanced = prefs.getBoolean("advanced", false)
     )
 
-    // Per-folder sort orders live apart from the settings: there can be many of them.
-    private val sorts = context.getSharedPreferences("folder_sort", Context.MODE_PRIVATE)
+    // Per-folder choices (sort, view, file types) live apart from the settings: there can be many of them.
+    private val folders = context.getSharedPreferences("folder_sort", Context.MODE_PRIVATE)
 
-    fun folderSort(key: String): String? = sorts.getString(key, null)
+    fun folderPref(key: String): String? = folders.getString(key, null)
 
-    /** Null forgets the folder's order. */
-    fun setFolderSort(key: String, mode: String?) {
-        sorts.edit().apply { if (mode == null) remove(key) else putString(key, mode) }.apply()
+    /** Null forgets the folder's choice. */
+    fun setFolderPref(key: String, value: String?) {
+        folders.edit().apply { if (value == null) remove(key) else putString(key, value) }.apply()
     }
 
     private inline fun <reified T : Enum<T>> enumOr(name: String?, default: T): T =
