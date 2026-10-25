@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.media.ExifInterface
+import androidx.exifinterface.media.ExifInterface
 import android.media.MediaScannerConnection
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -164,11 +164,18 @@ fun ImageEditorScreen(
         val result = baked() ?: return
         busy = true
         scope.launch {
-            val target = if (replace) File(fileItem.path) else copyName(File(fileItem.path))
+            val original = File(fileItem.path)
+            val target = if (replace) original else copyName(original)
             val error = withContext(Dispatchers.IO) {
                 runCatching {
+                    // Read before writing: replacing overwrites the original's details.
+                    val details = readDetails(original)
+                    val modified = original.lastModified()
                     // Formats Android cannot write (heic, gif...) are saved as a copy in PNG or JPEG.
                     FileOutputStream(target).use { out -> result.compress(formatFor(target), 92, out) }
+                    writeDetails(target, details)
+                    // Galleries without a shooting date sort by this: the photo stays among its own days.
+                    if (replace) target.setLastModified(modified)
                     MediaScannerConnection.scanFile(context, arrayOf(target.absolutePath), null, null)
                 }.exceptionOrNull()
             }
@@ -410,6 +417,36 @@ private fun decode(path: String): Pair<Bitmap?, Boolean> {
         }
     }.getOrDefault(0f)
     return (if (degrees != 0f) rotate(bmp, degrees) else bmp) to (sample > 1)
+}
+
+// What a camera writes about a shot: when, where, with what. The picture itself is new, so its size,
+// orientation (already applied) and thumbnail are not carried over.
+private val DETAILS = listOf(
+    ExifInterface.TAG_DATETIME, ExifInterface.TAG_DATETIME_ORIGINAL, ExifInterface.TAG_DATETIME_DIGITIZED,
+    ExifInterface.TAG_OFFSET_TIME, ExifInterface.TAG_OFFSET_TIME_ORIGINAL, ExifInterface.TAG_OFFSET_TIME_DIGITIZED,
+    ExifInterface.TAG_SUBSEC_TIME, ExifInterface.TAG_SUBSEC_TIME_ORIGINAL, ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
+    ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF, ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,
+    ExifInterface.TAG_GPS_ALTITUDE, ExifInterface.TAG_GPS_ALTITUDE_REF, ExifInterface.TAG_GPS_TIMESTAMP, ExifInterface.TAG_GPS_DATESTAMP,
+    ExifInterface.TAG_GPS_PROCESSING_METHOD, ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL, ExifInterface.TAG_F_NUMBER,
+    ExifInterface.TAG_EXPOSURE_TIME, ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_FOCAL_LENGTH,
+    ExifInterface.TAG_FLASH, ExifInterface.TAG_WHITE_BALANCE, ExifInterface.TAG_IMAGE_DESCRIPTION, ExifInterface.TAG_ARTIST,
+    ExifInterface.TAG_COPYRIGHT, ExifInterface.TAG_USER_COMMENT
+)
+
+private fun readDetails(file: File): Map<String, String> = runCatching {
+    val exif = ExifInterface(file.absolutePath)
+    DETAILS.mapNotNull { tag -> exif.getAttribute(tag)?.let { tag to it } }.toMap()
+}.getOrDefault(emptyMap())
+
+/** Best effort: a picture without its details is still a saved picture. */
+private fun writeDetails(file: File, details: Map<String, String>) {
+    if (details.isEmpty()) return
+    runCatching {
+        val exif = ExifInterface(file.absolutePath)
+        details.forEach { (tag, value) -> exif.setAttribute(tag, value) }
+        exif.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+        exif.saveAttributes()
+    }
 }
 
 private fun rotate(src: Bitmap, degrees: Float): Bitmap =
