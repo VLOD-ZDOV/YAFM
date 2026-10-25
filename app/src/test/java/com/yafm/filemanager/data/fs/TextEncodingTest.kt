@@ -1,6 +1,7 @@
 package com.yafm.filemanager.data.fs
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.nio.charset.Charset
@@ -23,5 +24,15 @@ class TextEncodingTest {
         val cp1251 = Charset.forName("windows-1251")
         assertEquals(text, TextEncoding.decode(TextEncoding.encode(text, cp1251)!!, cp1251))
         assertNull(TextEncoding.encode("emoji 🙂", cp1251))
+    }
+
+    @Test
+    fun readsLongFilesWhole() {
+        // Longer than the decoding buffer and the sample: a bad byte at the very end still counts.
+        val long = text.repeat(2000).toByteArray()
+        assertEquals(Charsets.UTF_8, TextEncoding.detect(long))
+        assertNotEquals(Charsets.UTF_8, TextEncoding.detect(long + byteArrayOf(0xC0.toByte(), 0x41)))
+        // A multi-byte letter cut off at the end is not UTF-8.
+        assertNotEquals(Charsets.UTF_8, TextEncoding.detect(long + "Я".toByteArray().copyOf(1)))
     }
 }

@@ -1,6 +1,7 @@
 package com.yafm.filemanager.data.fs
 
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
@@ -23,8 +24,12 @@ object TextEncoding {
         if (data.any { it == 0.toByte() }) return null
         if (isUtf8(data)) return Charsets.UTF_8
         // An old 8-bit file: the encoding whose letters look most like real words wins.
-        return CHOICES.filter { it.name() in EIGHT_BIT }.maxByOrNull { score(String(data, it)) } ?: Charsets.ISO_8859_1
+        // A sample tells as well as the whole file, without decoding megabytes four times over.
+        val sample = if (data.size > SAMPLE) data.copyOf(SAMPLE) else data
+        return CHOICES.filter { it.name() in EIGHT_BIT }.maxByOrNull { score(String(sample, it)) } ?: Charsets.ISO_8859_1
     }
+
+    private const val SAMPLE = 64 * 1024
 
     private val EIGHT_BIT = setOf("windows-1251", "KOI8-R", "IBM866", "windows-1252")
 
@@ -42,12 +47,20 @@ object TextEncoding {
         }.toInt()
     }
 
-    private fun isUtf8(data: ByteArray): Boolean = try {
-        Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(data))
-        true
-    } catch (_: CharacterCodingException) {
-        false
+    /** Checked through a small buffer: decoding the whole file only to throw the text away doubles the memory. */
+    private fun isUtf8(data: ByteArray): Boolean {
+        val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        val input = ByteBuffer.wrap(data)
+        val out = CharBuffer.allocate(8192)
+        while (true) {
+            val result = decoder.decode(input, out, true)
+            if (result.isError) return false
+            if (result.isUnderflow) break
+            out.clear()
+        }
+        out.clear()
+        return !decoder.flush(out).isError
     }
 
     private fun ByteArray.startsWith(vararg bytes: Int) =
