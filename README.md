@@ -10,19 +10,23 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Phone storage, and the whole file system with root (KernelSU, Magisk, APatch).
 - Copy and move between any storages: phone, root, SFTP, qsh, SMB, FTP. Names already taken get a “ (1)” suffix, nothing is overwritten.
 - Categories on the home screen list every image, video, song, document or archive in internal storage, grouped by folder. A folder's files are selected with one tap, and a category can be narrowed to some file types (say, pdf and docx).
+- Recent: files added or changed in the last 30 days, by day, each marked as added or changed.
+- Favorite folders on the home screen, from any storage. Sort order, file types and list or grid view are kept per folder; category folders can be collapsed.
 - Duplicates: files with the same content, under any name, in a category or a folder tree. The copy outside messenger and cache folders is kept.
-- Thumbnails for images and videos, list and grid views, search, sorting, hidden files.
-- Batch rename, permissions (chmod), file properties with MD5 and SHA-256.
+- Thumbnails for images and videos, type labels on icons (PDF, Word, ZIP...), list and grid views, search, sorting, hidden files.
+- Send files to other apps, invert the selection, open any file as text. Files opened from other apps ("Open with") get a choice of actions.
+- Batch rename, permissions (chmod), file properties with MD5 and SHA-256. Links can be created in advanced mode (root folders and SFTP).
+- Photos: a basic editor (rotate, mirror, resize, draw) that keeps the shooting date and place, and clean copies without metadata for sharing.
 - Links are never followed when deleting or copying folders: a link is removed, not what it points to.
 
 ### Archives
 - Extracts by content, not by name: zip, 7z, tar, ar and cpio, compressed with gz, bz2, xz, lzma, zstd, lz4, snappy, Z or brotli, and single compressed files.
 - Creates zip, 7z, tar, tar.gz, tar.bz2, tar.xz, tar.zst and tar.lz4.
-- Files are only written inside the chosen folder; links and devices from an archive are skipped.
+- Files are only written inside the chosen folder; links and devices from an archive are skipped. Existing files are kept, skipped or replaced, as chosen.
 
 ### Players
 - Video: libVLC, so nearly any format plays (mkv with AC3/DTS, avi, wmv, flv...). Gestures for seeking, brightness and volume, audio track and subtitle choice, speed, frame modes, screen lock, resume, next/previous in the folder. Opening a video can ask whether to use it or another app.
-- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue (also from the Music category).
+- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue that goes round (also from the Music category); the notification opens the player.
 
 ### Network storage
 - **SFTP** (SSH): one connection per server; the server key is remembered on first connect and a changed key is refused.
@@ -32,7 +36,7 @@ An Android file manager for phone storage, root and network servers, with a vide
 
 ### Other
 - App manager with APK backup, storage analysis by type, root shell (with the top CPU and RAM processes), text editor.
-- Themes: system, light, dark and AMOLED black, with wallpaper colors.
+- Themes: system, light, dark and AMOLED black, with wallpaper colors. Portrait and landscape.
 - Updates from GitHub releases, checked at startup (can be turned off).
 - English and Russian.
 
