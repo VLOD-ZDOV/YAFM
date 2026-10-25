@@ -29,7 +29,8 @@ object Metadata {
         var n = 2
         while (copy.exists()) copy = File(file.parentFile, "${base}_${n++}.${file.extension}")
         copy.writeBytes(clean)
-        if (orientation != ExifInterface.ORIENTATION_NORMAL) {
+        // 0 means "not set" and 1 "upright": only a real turn or mirror is written back.
+        if (orientation in 2..8) {
             ExifInterface(copy.absolutePath).apply {
                 setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString())
                 saveAttributes()
