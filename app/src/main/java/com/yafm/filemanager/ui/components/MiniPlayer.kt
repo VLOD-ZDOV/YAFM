@@ -20,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,7 +41,7 @@ import java.io.File
 
 /** A bar for the music that plays in the background: pause, stop, or open the player. */
 @Composable
-fun MiniPlayer(onOpen: (File, List<File>) -> Unit, modifier: Modifier = Modifier) {
+fun MiniPlayer(onOpen: (File, List<File>) -> Unit, onShown: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var title by remember { mutableStateOf<String?>(null) }
@@ -74,7 +75,10 @@ fun MiniPlayer(onOpen: (File, List<File>) -> Unit, modifier: Modifier = Modifier
     }
 
     val c = controller
-    if (!hasMusic || c == null) return
+    val shown = hasMusic && c != null
+    LaunchedEffect(shown) { onShown(shown) }
+    DisposableEffect(Unit) { onDispose { onShown(false) } }
+    if (!shown || c == null) return
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         tonalElevation = 3.dp,

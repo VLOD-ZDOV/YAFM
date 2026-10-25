@@ -198,11 +198,14 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
 
     // Music playing in the background gets a bar under the browsing screens.
     val showMini = currentScreen is AppScreen.Home || currentScreen is AppScreen.Explorer
+    // Only a bar that is really shown takes over the navigation bar's space; without music the
+    // screen above must keep clear of it itself.
+    var miniShown by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
     Box(
         Modifier
             .weight(1f)
-            .then(if (showMini) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier)
+            .then(if (showMini && miniShown) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier)
     ) {
     Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
         when (screen) {
@@ -338,6 +341,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
     }
     if (showMini) {
         MiniPlayer(
+            onShown = { miniShown = it },
             onOpen = { file, queue -> currentScreen = AppScreen.AudioPlayer(file, queue, back = currentScreen) },
             modifier = Modifier.navigationBarsPadding()
         )
