@@ -3,6 +3,9 @@ package com.yafm.filemanager.ui.screens
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
 import android.os.Environment
+import com.yafm.filemanager.data.fs.isHidden
+import com.yafm.filemanager.data.fs.walkFiles
+import java.util.PriorityQueue
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -82,6 +85,9 @@ data class CategoryStat(
     val count: Int
 )
 
+/** How many of the largest files are listed, overall and of each kind. */
+private const val LARGEST = 50
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StorageAnalyzerScreen(
@@ -95,7 +101,7 @@ fun StorageAnalyzerScreen(
     var totalScannedBytes by remember { mutableStateOf(0L) }
     var filter by remember { mutableStateOf<FileCategory?>(null) }
     val largestFiles = remember(allFiles, filter) {
-        allFiles.asSequence().filter { filter == null || statCategory(it.category) == filter }.take(50).toList()
+        allFiles.asSequence().filter { filter == null || statCategory(it.category) == filter }.take(LARGEST).toList()
     }
 
     BackHandler {
@@ -104,32 +110,31 @@ fun StorageAnalyzerScreen(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val files = mutableListOf<FileItem>()
+            // Only the largest files of each kind are shown: the rest are counted, not kept.
+            val largest = mutableMapOf<FileCategory, PriorityQueue<FileItem>>()
             val catBytes = mutableMapOf<FileCategory, Long>()
             val catCounts = mutableMapOf<FileCategory, Int>()
             runCatching {
-                Environment.getExternalStorageDirectory().walkTopDown()
-                    // Links are not followed: a link to a parent would never end.
-                    .onEnter { !java.nio.file.Files.isSymbolicLink(it.toPath()) }
-                    .filter { it.isFile && !it.name.startsWith(".") }
-                    .forEach { file ->
-                        val len = file.length()
-                        if (len > 0) {
-                            val item = FileItem(
-                                name = file.name,
-                                path = file.absolutePath,
-                                size = len,
-                                lastModified = file.lastModified(),
-                                storageType = StorageType.LOCAL
-                            )
-                            files += item
-                            val cat = statCategory(item.category)
-                            catBytes[cat] = (catBytes[cat] ?: 0L) + len
-                            catCounts[cat] = (catCounts[cat] ?: 0) + 1
-                        }
+                walkFiles(Environment.getExternalStorageDirectory().absolutePath) { path, attrs ->
+                    val len = attrs.size()
+                    if (len > 0 && !path.isHidden) {
+                        val item = FileItem(
+                            name = path.fileName.toString(),
+                            path = path.toString(),
+                            size = len,
+                            lastModified = attrs.lastModifiedTime().toMillis(),
+                            storageType = StorageType.LOCAL
+                        )
+                        val cat = statCategory(item.category)
+                        catBytes[cat] = (catBytes[cat] ?: 0L) + len
+                        catCounts[cat] = (catCounts[cat] ?: 0) + 1
+                        val top = largest.getOrPut(cat) { PriorityQueue(LARGEST + 1, compareBy { it.size }) }
+                        top += item
+                        if (top.size > LARGEST) top.poll()
                     }
+                }
             }
-            files.sortByDescending { it.size }
+            val files = largest.values.flatten().sortedByDescending { it.size }
 
             fun stat(c: FileCategory, title: String, color: Color) = CategoryStat(c, title, color, catBytes[c] ?: 0L, catCounts[c] ?: 0)
             val stats = listOf(
