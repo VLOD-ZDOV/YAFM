@@ -379,8 +379,8 @@
     <string name="save_to_downloads">Сохранить в Загрузки</string>
     <string name="cannot_open_this_file">Этот файл здесь не открыть</string>
     <string name="remove_metadata">Удалить метаданные</string>
-    <string name="remove_metadata_hint">Из фото (%1$d шт., JPEG, PNG, WebP) удалятся дата и место съёмки, модель телефона и комментарии. Сами картинки не изменятся. Отменить нельзя.</string>
-    <string name="metadata_removed">Метаданные удалены из фото: %1$d</string>
+    <string name="remove_metadata_hint">Рядом с каждым фото (%1$d шт., JPEG, PNG, WebP) сохранится копия «_clean» без даты и места съёмки, модели телефона и комментариев. Оригиналы не изменятся.</string>
+    <string name="metadata_removed">Сохранено чистых копий: %1$d</string>
     <string name="recent">Недавние</string>
     <string name="today">Сегодня</string>
     <string name="yesterday">Вчера</string>

@@ -15,23 +15,27 @@ object Metadata {
     /** Formats whose details can be removed. */
     val SUPPORTED = setOf("jpg", "jpeg", "png", "webp")
 
-    fun strip(file: File) {
+    /**
+     * A clean copy next to [file] ("photo_clean.jpg"); the original keeps its details, so the gallery
+     * still knows when it was taken and a motion photo keeps its video.
+     */
+    fun cleanCopy(file: File): File {
         val orientation = runCatching {
             ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
         }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
         val clean = stripBytes(file.readBytes())
-        val temp = File(file.parentFile, ".${file.name}.strip")
-        temp.writeBytes(clean)
-        if (!temp.renameTo(file)) {
-            temp.delete()
-            throw IOException("Cannot replace ${file.name}")
-        }
+        val base = file.nameWithoutExtension + "_clean"
+        var copy = File(file.parentFile, "$base.${file.extension}")
+        var n = 2
+        while (copy.exists()) copy = File(file.parentFile, "${base}_${n++}.${file.extension}")
+        copy.writeBytes(clean)
         if (orientation != ExifInterface.ORIENTATION_NORMAL) {
-            ExifInterface(file.absolutePath).apply {
+            ExifInterface(copy.absolutePath).apply {
                 setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString())
                 saveAttributes()
             }
         }
+        return copy
     }
 
     /** The same picture without metadata; the format is told by its signature, not the name. */

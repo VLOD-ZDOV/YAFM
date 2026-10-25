@@ -559,10 +559,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             items.forEachIndexed { i, item ->
                 _progress.value = "${i + 1}/${items.size}: ${item.name}"
-                Metadata.strip(File(item.path))
+                val copy = Metadata.cleanCopy(File(item.path))
+                android.media.MediaScannerConnection.scanFile(getApplication(), arrayOf(copy.absolutePath), null, null)
             }
-            // The gallery keeps its own copy of the dates and places until it looks again.
-            android.media.MediaScannerConnection.scanFile(getApplication(), items.map { it.path }.toTypedArray(), null, null)
         }
     }
 

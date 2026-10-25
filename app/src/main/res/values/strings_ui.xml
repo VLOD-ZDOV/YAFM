@@ -379,8 +379,8 @@
     <string name="save_to_downloads">Save to Download</string>
     <string name="cannot_open_this_file">This file cannot be opened here</string>
     <string name="remove_metadata">Remove metadata</string>
-    <string name="remove_metadata_hint">The date and place of the shot, the phone model and comments are removed from %1$d photos (JPEG, PNG, WebP). The pictures stay the same. This cannot be undone.</string>
-    <string name="metadata_removed">Metadata removed from %1$d photos</string>
+    <string name="remove_metadata_hint">A copy of each of %1$d photos (JPEG, PNG, WebP) is saved next to it as “_clean”, without the date and place of the shot, the phone model and comments. The originals stay as they are.</string>
+    <string name="metadata_removed">Clean copies saved: %1$d</string>
     <string name="recent">Recent</string>
     <string name="today">Today</string>
     <string name="yesterday">Yesterday</string>
