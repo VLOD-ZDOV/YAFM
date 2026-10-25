@@ -54,11 +54,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -72,7 +74,9 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yafm.filemanager.data.audio.PlaybackService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
@@ -103,6 +107,7 @@ fun AudioPlayerScreen(
         fun sync(player: Player) {
             playing = player.isPlaying
             duration = player.duration.coerceAtLeast(0L)
+            position = player.currentPosition
             meta = player.mediaMetadata
             index = player.currentMediaItemIndex
             shuffle = player.shuffleModeEnabled
@@ -144,15 +149,18 @@ fun AudioPlayerScreen(
         }
     }
 
-    LaunchedEffect(controller) {
-        while (true) {
-            controller?.let { position = it.currentPosition }
+    // The position moves only while playing: a paused player is read once, not polled.
+    LaunchedEffect(controller, playing) {
+        controller?.let { position = it.currentPosition }
+        while (playing) {
             delay(500)
+            controller?.let { position = it.currentPosition }
         }
     }
 
-    val art = remember(meta) {
-        meta.artworkData?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+    // Decoded off the main thread and scaled down: a big cover would take tens of MB at full size.
+    val art by produceState<ImageBitmap?>(null, meta) {
+        value = meta.artworkData?.let { withContext(Dispatchers.Default) { decodeArt(it) } }
     }
 
     @Composable
@@ -164,8 +172,9 @@ fun AudioPlayerScreen(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            if (art != null) {
-                Image(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            val cover = art
+            if (cover != null) {
+                Image(cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
                 Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary)
             }
@@ -319,6 +328,16 @@ fun AudioPlayerScreen(
             }
         }
     }
+}
+
+/** Cover art at most about [max] px a side. */
+private fun decodeArt(data: ByteArray, max: Int = 1024): ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= max) sample *= 2
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    return BitmapFactory.decodeByteArray(data, 0, data.size, options)?.asImageBitmap()
 }
 
 private fun formatClock(ms: Long): String {
