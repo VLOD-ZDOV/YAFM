@@ -374,4 +374,7 @@
     <string name="folder_not_empty">The folder is not empty. Files with the same name:</string>
     <string name="keep_both">Keep both</string>
     <string name="skip">Skip</string>
+    <string name="incoming_copy_hint">The app gave only a copy of the file: save it to keep it.</string>
+    <string name="show_in_folder">Show in its folder</string>
+    <string name="save_to_downloads">Save to Download</string>
 </resources>

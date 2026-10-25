@@ -374,4 +374,7 @@
     <string name="folder_not_empty">Папка не пустая. Файлы с тем же именем:</string>
     <string name="keep_both">Оставить оба</string>
     <string name="skip">Пропустить</string>
+    <string name="incoming_copy_hint">Приложение дало только копию файла: сохраните её, чтобы она не пропала.</string>
+    <string name="show_in_folder">Показать в папке</string>
+    <string name="save_to_downloads">Сохранить в Загрузки</string>
 </resources>

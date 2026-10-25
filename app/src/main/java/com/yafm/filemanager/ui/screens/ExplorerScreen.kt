@@ -233,6 +233,25 @@ fun ExplorerScreen(
 
     val isSelectionMode = selectedItems.isNotEmpty()
 
+    fun openItem(item: FileItem) {
+        when {
+            item.isDirectory -> viewModel.navigateTo(item.path)
+            ArchiveManager.isArchive(item.name) -> extractTarget = item
+            item.category == FileCategory.VIDEO -> openVideo(item)
+            item.category == FileCategory.AUDIO -> playAudio(item)
+            else -> handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
+        }
+    }
+
+    // A file another app asked to open: once its folder is listed, it opens as if tapped.
+    val pendingOpen by viewModel.pendingOpen.collectAsState()
+    LaunchedEffect(pendingOpen, isLoading) {
+        val path = pendingOpen ?: return@LaunchedEffect
+        if (isLoading) return@LaunchedEffect
+        viewModel.clearPendingOpen()
+        (fileList.firstOrNull { it.path == path } ?: FileItem(File(path).name, path, size = File(path).length())).let { openItem(it) }
+    }
+
     BackHandler {
         if (isSelectionMode) {
             viewModel.clearSelection()
@@ -770,16 +789,7 @@ fun ExplorerScreen(
                         )
                     }
                 } else {
-                    fun onItemClick(item: FileItem) {
-                        when {
-                            isSelectionMode -> viewModel.toggleSelection(item)
-                            item.isDirectory -> viewModel.navigateTo(item.path)
-                            ArchiveManager.isArchive(item.name) -> extractTarget = item
-                            item.category == FileCategory.VIDEO -> openVideo(item)
-                            item.category == FileCategory.AUDIO -> playAudio(item)
-                            else -> handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
-                        }
-                    }
+                    fun onItemClick(item: FileItem) = if (isSelectionMode) viewModel.toggleSelection(item) else openItem(item)
                     // A category gathers files from many folders: they come grouped, each under its folder.
                     val sections = remember(fileList, location) {
                         if (location.category != null) FileExplorerViewModel.groupByFolder(fileList, location.path)

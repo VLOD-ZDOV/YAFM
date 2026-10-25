@@ -45,6 +45,7 @@ import com.yafm.filemanager.ui.screens.VideoPlayerScreen
 import com.yafm.filemanager.ui.screens.AudioPlayerScreen
 import com.yafm.filemanager.ui.components.UpdateDialog
 import com.yafm.filemanager.ui.components.CodeDialog
+import com.yafm.filemanager.ui.components.IncomingFileDialog
 import com.yafm.filemanager.ui.screens.StorageAnalyzerScreen
 import com.yafm.filemanager.ui.screens.DuplicatesScreen
 import com.yafm.filemanager.ui.screens.TextEditorScreen
@@ -75,9 +76,17 @@ class MainActivity : ComponentActivity() {
     /** Set by a tap on the music notification. */
     private val openPlayer = MutableStateFlow(false)
 
+    /** A file another app asked to open ("Open with"). */
+    private val incoming = MutableStateFlow<Uri?>(null)
+
+    private fun handle(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) openPlayer.value = true
+        if (intent?.action == Intent.ACTION_VIEW) intent.data?.let { incoming.value = it }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) openPlayer.value = true
+        handle(intent)
     }
 
     companion object {
@@ -107,7 +116,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         checkAndRequestStoragePermissions()
-        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) openPlayer.value = true
+        if (savedInstanceState == null) handle(intent)
 
         val settings = (application as YafmApp).settings
         setContent {
@@ -117,7 +126,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FileManagerApp(viewModel = viewModel, openPlayer = openPlayer)
+                    FileManagerApp(viewModel = viewModel, openPlayer = openPlayer, incoming = incoming)
                 }
             }
         }
@@ -152,8 +161,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlow<Boolean>) {
+fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlow<Boolean>, incoming: MutableStateFlow<Uri?>) {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
+
+    IncomingFileDialog(
+        incoming = incoming,
+        onOpen = { file ->
+            viewModel.showIncoming(file, open = true)
+            currentScreen = AppScreen.Explorer
+        },
+        onShowInFolder = { file ->
+            viewModel.showIncoming(file, open = false)
+            currentScreen = AppScreen.Explorer
+        },
+        onOpenAsText = { file ->
+            currentScreen = AppScreen.TextEditor(FileItem(file.name, file.absolutePath, size = file.length()))
+        },
+        onSaveToDownloads = { file ->
+            viewModel.saveToDownloads(file)
+            currentScreen = AppScreen.Explorer
+        }
+    )
 
     val playerRequested by openPlayer.collectAsState()
     LaunchedEffect(playerRequested) {

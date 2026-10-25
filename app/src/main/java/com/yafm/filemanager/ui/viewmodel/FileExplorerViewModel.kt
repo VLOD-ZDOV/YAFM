@@ -305,6 +305,34 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
+    // Files opened from other apps
+
+    private val _pendingOpen = MutableStateFlow<String?>(null)
+    val pendingOpen: StateFlow<String?> = _pendingOpen.asStateFlow()
+
+    fun clearPendingOpen() {
+        _pendingOpen.value = null
+    }
+
+    /** Shows the file's folder and opens the file there (or only selects it with [open] false). */
+    fun showIncoming(file: File, open: Boolean) {
+        navigateToLocal(file.parent ?: "/")
+        if (open) _pendingOpen.value = file.absolutePath
+    }
+
+    /** A copy from another app kept in Download, under a free name. */
+    fun saveToDownloads(file: File) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val dest = ArchiveManager.freeFile(File(dir, file.name))
+                file.copyTo(dest)
+                dest
+            }.onSuccess { _messages.tryEmit(str(R.string.saved_as, it.absolutePath)); showIncoming(it, open = false) }
+                .onFailure { _messages.tryEmit(describe(it)) }
+        }
+    }
+
     fun navigateBack(): Boolean {
         val previous = history.removeLastOrNull() ?: return false
         show(previous)
