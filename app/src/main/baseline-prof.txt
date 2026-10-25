@@ -1,0 +1,4 @@
+# The app's own code, compiled ahead of time at install (by profileinstaller, which Compose brings
+# in, also outside Google Play): less JIT work at start and while scrolling. Libraries ship their own.
+HSPLcom/yafm/filemanager/**->**(**)**
+Lcom/yafm/filemanager/**;
