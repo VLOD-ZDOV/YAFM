@@ -57,6 +57,22 @@ data class FileItem(
             }
         }
 
+    /** A short name of the file's kind for its icon: "Word" says more than a blue page. */
+    val typeLabel: String
+        get() = when {
+            isDirectory -> ""
+            name.lowercase().let { n -> listOf(".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tar.lz4").firstOrNull { n.endsWith(it) } } != null ->
+                name.lowercase().substringAfter(".tar.").let { "TAR.${it.uppercase()}" }
+            else -> when (extension) {
+                "doc", "docx", "odt", "rtf" -> "Word"
+                "xls", "xlsx", "ods", "csv" -> "Excel"
+                "ppt", "pptx", "odp" -> "PPT"
+                "pdf" -> "PDF"
+                "apk", "xapk", "apks" -> "APK"
+                else -> extension.uppercase().take(5)
+            }
+        }
+
     fun formattedSize(): String {
         if (isDirectory) return ""
         if (size <= 0) return "0 B"

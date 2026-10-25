@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -216,6 +217,15 @@ fun FileListItem(
     }
 }
 
+/** Office files share an icon; their usual colors tell them apart. */
+private fun labelColor(label: String): Color? = when (label) {
+    "Word" -> Color(0xFF2B579A)
+    "Excel" -> Color(0xFF217346)
+    "PPT" -> Color(0xFFD24726)
+    "PDF" -> Color(0xFFD32F2F)
+    else -> null
+}
+
 @Composable
 fun FileIcon(item: FileItem, modifier: Modifier = Modifier, fill: Boolean = false) {
     val (icon, tint) = when (item.category) {
@@ -247,6 +257,20 @@ fun FileIcon(item: FileItem, modifier: Modifier = Modifier, fill: Boolean = fals
                 tint = tint,
                 modifier = Modifier.size(if (fill) 48.dp else 24.dp)
             )
+            if (!preview && item.typeLabel.isNotEmpty()) {
+                Text(
+                    item.typeLabel,
+                    color = Color.White,
+                    fontSize = if (fill) 11.sp else 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (fill) 6.dp else 2.dp)
+                        .background(labelColor(item.typeLabel) ?: tint, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 3.dp)
+                )
+            }
             if (preview) {
                 val context = LocalContext.current
                 val request = remember(item.path, item.lastModified) {
