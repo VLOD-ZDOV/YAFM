@@ -157,6 +157,6 @@ object ArchiveContents {
                 result[first] = e
             }
         }
-        return result.values.sortedWith(compareBy<Entry> { !it.isDirectory }.thenBy { it.name.lowercase() })
+        return result.values.sortedWith(compareBy<Entry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }
 }
