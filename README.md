@@ -14,12 +14,14 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Favorite folders on the home screen, from any storage. Sort order, file types and list or grid view are kept per folder; category folders can be collapsed.
 - Duplicates: files with the same content, under any name, in a category or a folder tree. The copy outside messenger and cache folders is kept.
 - Thumbnails for images and videos, type labels on icons (PDF, Word, ZIP...), list and grid views, search, sorting, hidden files.
-- Send files to other apps, invert the selection, open any file as text. Files opened from other apps ("Open with") get a choice of actions.
+- Send files to other apps, invert the selection. Unknown files that hold text open in the editor; others can be opened as text, archive, picture, video or music. Files opened from other apps ("Open with") get a choice of actions.
+- The text editor keeps a file's encoding (UTF-8, cp1251, KOI8-R, CP866, UTF-16), can convert it to UTF-8, and shows binary files read only.
 - Batch rename, permissions (chmod), file properties with MD5 and SHA-256. Links can be created in advanced mode (root folders and SFTP).
 - Photos: a basic editor (rotate, mirror, resize, draw) that keeps the shooting date and place, and clean copies without metadata for sharing.
 - Links are never followed when deleting or copying folders: a link is removed, not what it points to.
 
 ### Archives
+- Archives open like folders: browse them and open one file without extracting the rest. Self-extracting .exe files open too.
 - Extracts by content, not by name: zip, 7z, tar, ar and cpio, compressed with gz, bz2, xz, lzma, zstd, lz4, snappy, Z or brotli, and single compressed files.
 - Creates zip, 7z, tar, tar.gz, tar.bz2, tar.xz, tar.zst and tar.lz4.
 - Files are only written inside the chosen folder; links and devices from an archive are skipped. Existing files are kept, skipped or replaced, as chosen.
