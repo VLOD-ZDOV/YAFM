@@ -11,6 +11,8 @@ import com.yafm.filemanager.data.archive.ArchiveManager
 import com.yafm.filemanager.data.dupes.DuplicateFinder
 import com.yafm.filemanager.data.media.Metadata
 import com.yafm.filemanager.data.fs.TextSniffer
+import com.yafm.filemanager.data.fs.isHidden
+import com.yafm.filemanager.data.fs.walkFiles
 import com.yafm.filemanager.data.fs.joinPath
 import com.yafm.filemanager.data.model.FileCategory
 import com.yafm.filemanager.data.model.FileItem
@@ -418,12 +420,13 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private fun filterAndSort(items: List<FileItem>, query: String, showHidden: Boolean, sort: SortMode): List<FileItem> {
-        val filtered = items.filter { (showHidden || !it.isHidden) && (query.isEmpty() || it.name.lowercase().contains(query)) }
+        val filtered = items.filter { (showHidden || !it.isHidden) && (query.isEmpty() || it.name.contains(query, ignoreCase = true)) }
         val dirsFirst = compareBy<FileItem> { !it.isDirectory }
         return filtered.sortedWith(
             when (sort) {
-                SortMode.NAME_ASC -> dirsFirst.thenBy { it.name.lowercase() }
-                SortMode.NAME_DESC -> dirsFirst.thenByDescending { it.name.lowercase() }
+                // Compared in place: lowercase() would make two new strings for every comparison.
+                SortMode.NAME_ASC -> dirsFirst.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                SortMode.NAME_DESC -> dirsFirst.thenByDescending(String.CASE_INSENSITIVE_ORDER) { it.name }
                 SortMode.DATE_DESC -> dirsFirst.thenByDescending { it.lastModified }
                 SortMode.DATE_ASC -> dirsFirst.thenBy { it.lastModified }
                 SortMode.SIZE_DESC -> dirsFirst.thenByDescending { it.size }
@@ -712,11 +715,14 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _duplicates.value = null
         duplicatesJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _duplicatesProgress.value = str(R.string.scanning_files)
-            val files = categoryFiles ?: File(loc.path).walkTopDown()
-                .onEnter { (showHidden || !it.name.startsWith(".")) && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
-                .filter { it.isFile && (showHidden || !it.name.startsWith(".")) }
-                .map { FileItem(name = it.name, path = it.absolutePath, size = it.length(), lastModified = it.lastModified()) }
-                .toList()
+            val files = categoryFiles ?: buildList {
+                walkFiles(loc.path, enter = { showHidden || !it.isHidden }) { path, attrs ->
+                    ensureActive()
+                    if (showHidden || !path.isHidden) {
+                        add(FileItem(name = path.fileName.toString(), path = path.toString(), size = attrs.size(), lastModified = attrs.lastModifiedTime().toMillis()))
+                    }
+                }
+            }
             val groups = DuplicateFinder.find(files) { done, total ->
                 ensureActive()
                 if (done % 20 == 0 || done == total) _duplicatesProgress.value = str(R.string.checked_of, done, total)
