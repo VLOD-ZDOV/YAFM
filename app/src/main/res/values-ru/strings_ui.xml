@@ -388,8 +388,10 @@
     <string name="changed">Изменён</string>
     <string name="open_as">Открыть как…</string>
     <string name="as_text">Текст</string>
-    <string name="as_archive">Архив (распаковать)</string>
+    <string name="as_archive">Архив</string>
     <string name="as_image">Картинку</string>
     <string name="as_video">Видео</string>
     <string name="as_music">Музыку</string>
+    <string name="not_found_in_archive">В архиве нет «%1$s»</string>
+    <string name="extract_all">Распаковать всё</string>
 </resources>

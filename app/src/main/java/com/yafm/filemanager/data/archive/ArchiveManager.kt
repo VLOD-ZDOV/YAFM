@@ -146,7 +146,7 @@ object ArchiveManager {
 
     private const val SCAN_LIMIT = 32L * 1024 * 1024
 
-    private fun findSignature(file: File, signature: ByteArray): Long? {
+    internal fun findSignature(file: File, signature: ByteArray): Long? {
         FileInputStream(file).use { input ->
             val buf = ByteArray(1024 * 1024 + signature.size)
             var carried = 0 // bytes kept from the previous chunk, so a signature split between chunks is found
@@ -354,6 +354,6 @@ object ArchiveManager {
         Format.ZIP, Format.SEVEN_Z -> error("not a tar format")
     }
 
-    private val SEVEN_Z_MAGIC = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
-    private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
+    internal val SEVEN_Z_MAGIC = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
+    internal val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
 }

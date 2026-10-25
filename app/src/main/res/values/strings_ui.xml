@@ -388,8 +388,10 @@
     <string name="changed">Changed</string>
     <string name="open_as">Open as…</string>
     <string name="as_text">Text</string>
-    <string name="as_archive">Archive (extract)</string>
+    <string name="as_archive">Archive</string>
     <string name="as_image">Picture</string>
     <string name="as_video">Video</string>
     <string name="as_music">Music</string>
+    <string name="not_found_in_archive">“%1$s” is not in the archive</string>
+    <string name="extract_all">Extract all</string>
 </resources>

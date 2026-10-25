@@ -88,6 +88,23 @@ class ArchiveManagerTest {
     }
 
     @Test
+    fun contentsAreListedAndOneFileComesOut() = runBlocking {
+        listOf(ArchiveManager.Format.ZIP, ArchiveManager.Format.SEVEN_Z, ArchiveManager.Format.TAR_GZ).forEach { format ->
+            val archive = File(base, "view${format.extension}")
+            ArchiveManager.createArchive(listOf(src), archive, format)
+            val entries = ArchiveContents.list(archive)
+
+            assertEquals(listOf("data"), ArchiveContents.children(entries, "").map { it.name })
+            assertEquals(listOf("sub", "a.txt", "имя с пробелом.txt"), ArchiveContents.children(entries, "data").map { it.name })
+            assertEquals(listOf("b.bin"), ArchiveContents.children(entries, "data/sub/deep").map { it.name })
+
+            val out = ArchiveContents.extractOne(archive, "data/sub/deep/b.bin", File(base, "one-${format.name}"))
+            assertTrue(out.readBytes().contentEquals(File(src, "sub/deep/b.bin").readBytes()))
+            assertFalse("nothing else extracted", File(base, "one-${format.name}/a.txt").exists())
+        }
+    }
+
+    @Test
     fun everyFormatRoundTrips() = runBlocking {
         ArchiveManager.Format.entries.forEach { format ->
             val archive = File(base, "out${format.extension}")

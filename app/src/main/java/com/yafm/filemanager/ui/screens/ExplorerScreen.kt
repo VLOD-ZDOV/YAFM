@@ -123,6 +123,7 @@ fun ExplorerScreen(
     onOpenVideo: (java.io.File, List<java.io.File>) -> Unit,
     onOpenAudio: (java.io.File, List<java.io.File>) -> Unit,
     onEditImage: (FileItem) -> Unit,
+    onOpenArchive: (FileItem) -> Unit,
     onOpenDuplicates: () -> Unit
 ) {
     val context = LocalContext.current
@@ -239,7 +240,7 @@ fun ExplorerScreen(
     fun openItem(item: FileItem) {
         when {
             item.isDirectory -> viewModel.navigateTo(item.path)
-            ArchiveManager.isArchive(item.name) -> extractTarget = item
+            ArchiveManager.isArchive(item.name) -> onOpenArchive(item)
             item.category == FileCategory.VIDEO -> openVideo(item)
             item.category == FileCategory.AUDIO -> playAudio(item)
             // Unknown kinds: text opens in the editor, anything else asks how to open it.
@@ -398,7 +399,7 @@ fun ExplorerScreen(
                     Text(item.name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     listOf(
                         R.string.as_text to { onOpenFileInEditor(item) },
-                        R.string.as_archive to { extractTarget = item },
+                        R.string.as_archive to { onOpenArchive(item) },
                         R.string.as_image to {
                             viewModel.withLocalCopy(item) { file ->
                                 onOpenImage(item.copy(path = file.absolutePath, storageType = StorageType.LOCAL, serverId = null))
@@ -958,7 +959,7 @@ private fun shareFiles(context: Context, files: List<File>) {
     }
 }
 
-private fun openExternalIntent(context: Context, item: FileItem, file: File) {
+fun openExternalIntent(context: Context, item: FileItem, file: File) {
     try {
         val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {

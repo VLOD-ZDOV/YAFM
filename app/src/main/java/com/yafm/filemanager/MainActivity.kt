@@ -43,6 +43,9 @@ import com.yafm.filemanager.ui.screens.ExplorerScreen
 import com.yafm.filemanager.ui.screens.HomeScreen
 import com.yafm.filemanager.ui.screens.ImageViewerScreen
 import com.yafm.filemanager.ui.screens.ImageEditorScreen
+import com.yafm.filemanager.ui.screens.ArchiveBrowserScreen
+import com.yafm.filemanager.ui.screens.openExternalIntent
+import com.yafm.filemanager.data.model.FileCategory
 import com.yafm.filemanager.ui.screens.RootTerminalScreen
 import com.yafm.filemanager.ui.screens.SettingsScreen
 import com.yafm.filemanager.ui.screens.VideoPlayerScreen
@@ -60,15 +63,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 sealed class AppScreen {
     data object Home : AppScreen()
     data object Explorer : AppScreen()
-    data class TextEditor(val file: FileItem) : AppScreen()
-    data class ImageViewer(val file: FileItem) : AppScreen()
+    data class TextEditor(val file: FileItem, val back: AppScreen = Explorer) : AppScreen()
+    data class ImageViewer(val file: FileItem, val back: AppScreen = Explorer) : AppScreen()
+    /** An archive browsed like a folder; [folder] is where it was left. */
+    data class ArchiveBrowser(val file: FileItem, val back: AppScreen, val folder: String = "") : AppScreen()
     data class ImageEditor(val file: FileItem, val back: AppScreen) : AppScreen()
     data object AppManager : AppScreen()
     data object StorageAnalyzer : AppScreen()
     data object Duplicates : AppScreen()
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
-    data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>) : AppScreen()
+    data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
     /** No [file]: shows what is already playing. */
     data class AudioPlayer(val file: java.io.File?, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
 }
@@ -167,6 +172,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlow<Boolean>, incoming: MutableStateFlow<Uri?>) {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     IncomingFileDialog(
         incoming = incoming,
@@ -263,6 +269,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     onEditImage = { file ->
                         currentScreen = AppScreen.ImageEditor(file, back = AppScreen.Explorer)
                     },
+                    onOpenArchive = { file ->
+                        currentScreen = AppScreen.ArchiveBrowser(file, back = AppScreen.Explorer)
+                    },
                     onOpenDuplicates = {
                         currentScreen = AppScreen.Duplicates
                     }
@@ -273,7 +282,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     fileItem = screen.file,
                     repository = viewModel.repository,
                     onNavigateBack = {
-                        currentScreen = AppScreen.Explorer
+                        currentScreen = screen.back
                     }
                 )
             }
@@ -281,7 +290,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                 ImageViewerScreen(
                     fileItem = screen.file,
                     onNavigateBack = {
-                        currentScreen = AppScreen.Explorer
+                        currentScreen = screen.back
                     },
                     onEdit = { currentScreen = AppScreen.ImageEditor(screen.file, back = screen) }
                 )
@@ -293,6 +302,31 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     onSaved = {
                         viewModel.loadCurrentDirectory()
                         currentScreen = AppScreen.Explorer
+                    }
+                )
+            }
+            is AppScreen.ArchiveBrowser -> {
+                ArchiveBrowserScreen(
+                    archiveItem = screen.file,
+                    viewModel = viewModel,
+                    startFolder = screen.folder,
+                    onNavigateBack = { currentScreen = screen.back },
+                    onOpenFile = { item, folder ->
+                        // Back from the file returns into the archive, where it was left.
+                        val here = screen.copy(folder = folder)
+                        val file = java.io.File(item.path)
+                        currentScreen = when {
+                            com.yafm.filemanager.data.archive.ArchiveManager.isArchive(item.name) -> AppScreen.ArchiveBrowser(item, back = here)
+                            item.category == FileCategory.IMAGE -> AppScreen.ImageViewer(item, back = here)
+                            item.category == FileCategory.VIDEO -> AppScreen.VideoPlayer(file, listOf(file), back = here)
+                            item.category == FileCategory.AUDIO -> AppScreen.AudioPlayer(file, listOf(file), back = here)
+                            item.category == FileCategory.CODE || item.category == FileCategory.TEXT ||
+                                com.yafm.filemanager.data.fs.TextSniffer.looksLikeText(file) -> AppScreen.TextEditor(item, back = here)
+                            else -> {
+                                openExternalIntent(context, item, file)
+                                here
+                            }
+                        }
                     }
                 )
             }
@@ -333,7 +367,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     playlist = screen.playlist,
                     seekStepMs = s.seekSeconds * 1000L,
                     sideGestures = s.videoSideGestures,
-                    onNavigateBack = { currentScreen = AppScreen.Explorer }
+                    onNavigateBack = { currentScreen = screen.back }
                 )
             }
             is AppScreen.AudioPlayer -> {
