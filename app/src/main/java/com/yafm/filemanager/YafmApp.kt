@@ -6,6 +6,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
 import com.yafm.filemanager.ui.thumbs.AudioCoverFetcher
+import com.yafm.filemanager.ui.thumbs.ThumbnailFetcher
 import com.yafm.filemanager.data.repository.FileRepository
 import com.yafm.filemanager.data.settings.SettingsRepository
 
@@ -32,11 +33,12 @@ class YafmApp : Application(), ImageLoaderFactory {
     val repository by lazy { FileRepository(this) }
     val settings by lazy { SettingsRepository(this) }
 
-    // Video frames as thumbnails, next to Coil's image decoders.
+    // Video frames as thumbnails, next to Coil's image decoders; previews are kept on disk.
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .components {
             add(VideoFrameDecoder.Factory())
             add(AudioCoverFetcher.Factory())
+            add(ThumbnailFetcher.Factory())
         }
         .crossfade(true)
         .build()

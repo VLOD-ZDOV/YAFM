@@ -2,7 +2,10 @@ package com.yafm.filemanager.data.fs
 
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
+import android.os.Build
 import android.system.Os
+import android.system.OsConstants
+import android.system.StructStat
 import com.yafm.filemanager.data.model.FileItem
 import com.yafm.filemanager.data.model.StorageType
 import java.io.File
@@ -75,7 +78,31 @@ class LocalFileSystem(
 
     override fun symlink(target: String, linkPath: String) = orRoot({ Os.symlink(target, linkPath) }, { root.symlink(target, linkPath) })
 
+    /** One lstat per entry, and a stat only for links: what a link points to makes it a folder or a file. */
     private fun File.toItem(): FileItem {
+        val own = try { Os.lstat(path) } catch (_: Exception) { return toItemSlow() }
+        val isLink = OsConstants.S_ISLNK(own.st_mode)
+        // A broken link has no target to describe.
+        val st = if (isLink) (try { Os.stat(path) } catch (_: Exception) { return toItemSlow() }) else own
+        val isDir = OsConstants.S_ISDIR(st.st_mode)
+        return FileItem(
+            name = name,
+            path = absolutePath,
+            size = if (isDir) 0L else st.st_size,
+            isDirectory = isDir,
+            lastModified = modifiedMillis(st),
+            permissions = permissionString(st.st_mode and 0x1ff, isDir),
+            storageType = StorageType.LOCAL,
+            isSymlink = isLink
+        )
+    }
+
+    // Milliseconds like File.lastModified(): st_mtim exists from API 27, st_mtime has whole seconds.
+    private fun modifiedMillis(st: StructStat): Long =
+        if (Build.VERSION.SDK_INT >= 27) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1_000_000
+        else st.st_mtime * 1000
+
+    private fun File.toItemSlow(): FileItem {
         val isDir = isDirectory
         val isLink = Files.isSymbolicLink(toPath())
         val mode = try { Os.stat(path).st_mode and 0x1ff } catch (_: Exception) { null }

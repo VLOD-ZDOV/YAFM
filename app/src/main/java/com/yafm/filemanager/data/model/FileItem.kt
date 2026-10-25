@@ -40,8 +40,8 @@ data class FileItem(
     val isNew: Boolean
         get() = added > 0 && lastModified - added < 60_000
 
-    val extension: String
-        get() = if (isDirectory) "" else name.substringAfterLast('.', "").lowercase()
+    // Worked out once: lists read these for every row on every redraw, and when sorting and filtering.
+    val extension: String = if (isDirectory) "" else name.substringAfterLast('.', "").lowercase()
 
     val mimeType: String
         get() = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
@@ -49,31 +49,27 @@ data class FileItem(
     val isHidden: Boolean
         get() = name.startsWith(".")
 
-    val category: FileCategory
-        get() {
-            if (isDirectory) return FileCategory.FOLDER
-            return when (extension) {
-                "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif" -> FileCategory.IMAGE
-                "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "3gp", "ts" -> FileCategory.VIDEO
-                "mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma" -> FileCategory.AUDIO
-                "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp" -> FileCategory.DOCUMENT
-                "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz", "zst", "tzst", "lz4", "tlz4", "lzma", "br", "cpio" -> FileCategory.ARCHIVE
-                "apk", "xapk", "apks" -> FileCategory.APK
-                "kt", "kts", "java", "py", "c", "cpp", "cc", "h", "hpp", "cs", "rs", "go", "js", "mjs", "tsx", "jsx", "html", "htm",
-                "css", "scss", "json", "jsonc", "xml", "yaml", "yml", "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "prop",
-                "rc", "conf", "toml", "gradle", "lua", "rb", "php", "pl", "sql", "swift", "dart", "vue", "smali", "mk", "cmake",
-                "patch", "diff", "reg", "desktop", "service", "plist", "lst" -> FileCategory.CODE
-                "txt", "md", "log", "cfg", "ini", "inf", "properties", "env", "csv", "tsv", "srt", "ass", "ssa", "vtt", "sub", "lrc",
-                "nfo", "rst", "tex", "org", "cue", "m3u", "m3u8", "pls", "gitignore", "gitattributes", "editorconfig" -> FileCategory.TEXT
-                else -> FileCategory.OTHER
-            }
-        }
+    val category: FileCategory = if (isDirectory) FileCategory.FOLDER else when (extension) {
+        "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif" -> FileCategory.IMAGE
+        "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "3gp", "ts" -> FileCategory.VIDEO
+        "mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma" -> FileCategory.AUDIO
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp" -> FileCategory.DOCUMENT
+        "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz", "zst", "tzst", "lz4", "tlz4", "lzma", "br", "cpio" -> FileCategory.ARCHIVE
+        "apk", "xapk", "apks" -> FileCategory.APK
+        "kt", "kts", "java", "py", "c", "cpp", "cc", "h", "hpp", "cs", "rs", "go", "js", "mjs", "tsx", "jsx", "html", "htm",
+        "css", "scss", "json", "jsonc", "xml", "yaml", "yml", "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "prop",
+        "rc", "conf", "toml", "gradle", "lua", "rb", "php", "pl", "sql", "swift", "dart", "vue", "smali", "mk", "cmake",
+        "patch", "diff", "reg", "desktop", "service", "plist", "lst" -> FileCategory.CODE
+        "txt", "md", "log", "cfg", "ini", "inf", "properties", "env", "csv", "tsv", "srt", "ass", "ssa", "vtt", "sub", "lrc",
+        "nfo", "rst", "tex", "org", "cue", "m3u", "m3u8", "pls", "gitignore", "gitattributes", "editorconfig" -> FileCategory.TEXT
+        else -> FileCategory.OTHER
+    }
 
     /** A short name of the file's kind for its icon: "Word" says more than a blue page. */
     val typeLabel: String
         get() = when {
             isDirectory -> ""
-            name.lowercase().let { n -> listOf(".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tar.lz4").firstOrNull { n.endsWith(it) } } != null ->
+            TAR_SUFFIXES.any { name.endsWith(it, ignoreCase = true) } ->
                 name.lowercase().substringAfter(".tar.").let { "TAR.${it.uppercase()}" }
             else -> when (extension) {
                 "doc", "docx", "odt", "rtf" -> "Word"
@@ -96,7 +92,15 @@ data class FileItem(
 
     fun formattedDate(): String {
         if (lastModified <= 0) return ""
-        val formatter = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+        // One formatter per thread and language instead of a new one for every row.
+        val locale = Locale.getDefault()
+        val formatter = DATE_FORMAT.get()?.takeIf { it.first == locale }?.second
+            ?: SimpleDateFormat("dd MMM yyyy, HH:mm", locale).also { DATE_FORMAT.set(locale to it) }
         return formatter.format(Date(lastModified))
+    }
+
+    private companion object {
+        val TAR_SUFFIXES = listOf(".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tar.lz4")
+        val DATE_FORMAT = ThreadLocal<Pair<Locale, SimpleDateFormat>>()
     }
 }
