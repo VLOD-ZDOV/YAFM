@@ -370,4 +370,5 @@
     <string name="flip_vertical">Flip upside down</string>
     <string name="draw">Draw</string>
     <string name="edit_image">Edit</string>
+    <string name="save_changes">Save the changes?</string>
 </resources>

@@ -45,6 +45,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -79,8 +82,41 @@ fun TextEditorScreen(
 
     val isModified = content != originalContent
 
-    BackHandler {
-        onNavigateBack()
+    var confirmLeave by remember { mutableStateOf(false) }
+
+    fun save(then: () -> Unit = {}) {
+        isSaving = true
+        scope.launch {
+            try {
+                repository.writeText(fileItem, content)
+                originalContent = content
+                Toast.makeText(context, str(R.string.file_saved), Toast.LENGTH_SHORT).show()
+                then()
+            } catch (e: Exception) {
+                Toast.makeText(context, str(R.string.could_not_save, e.message), Toast.LENGTH_LONG).show()
+            } finally {
+                isSaving = false
+            }
+        }
+    }
+
+    // Unsaved text is asked about, not lost.
+    fun leave() = if (isModified && !loadFailed) confirmLeave = true else onNavigateBack()
+
+    BackHandler { leave() }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(str(R.string.save_changes)) },
+            confirmButton = { Button(onClick = { confirmLeave = false; save(onNavigateBack) }) { Text(str(R.string.save)) } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmLeave = false }) { Text(str(R.string.cancel)) }
+                    TextButton(onClick = { confirmLeave = false; onNavigateBack() }) { Text(str(R.string.discard)) }
+                }
+            }
+        )
     }
 
     LaunchedEffect(fileItem.path) {
@@ -127,7 +163,7 @@ fun TextEditorScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { leave() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
                     }
                 },
@@ -141,20 +177,7 @@ fun TextEditorScreen(
                     }
 
                     IconButton(
-                        onClick = {
-                            isSaving = true
-                            scope.launch {
-                                try {
-                                    repository.writeText(fileItem, content)
-                                    originalContent = content
-                                    Toast.makeText(context, str(R.string.file_saved), Toast.LENGTH_SHORT).show()
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, str(R.string.could_not_save, e.message), Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isSaving = false
-                                }
-                            }
-                        },
+                        onClick = { save() },
                         enabled = isModified && !isSaving && !loadFailed
                     ) {
                         if (isSaving) {

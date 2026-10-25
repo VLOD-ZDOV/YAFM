@@ -370,4 +370,5 @@
     <string name="flip_vertical">Перевернуть</string>
     <string name="draw">Рисовать</string>
     <string name="edit_image">Редактировать</string>
+    <string name="save_changes">Сохранить изменения?</string>
 </resources>
