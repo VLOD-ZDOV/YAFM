@@ -7,6 +7,13 @@ import androidx.compose.ui.res.stringResource
 import com.yafm.filemanager.R
 import android.os.Environment
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
@@ -28,11 +35,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -111,6 +116,10 @@ data class CategoryItem(
     /** Set: all files of this kind; null: open [path]. */
     val category: FileCategory? = null
 )
+
+/** One card or block of the home grid; its parts stack like in a list. */
+private fun LazyStaggeredGridScope.section(content: @Composable ColumnScope.() -> Unit) =
+    item { Column(content = content) }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -229,15 +238,19 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        // Landscape: two columns of cards, so a wide short screen is not one long scroll.
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(if (landscape) 2 else 1),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalItemSpacing = 16.dp,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Root Status Banner
-            item {
+            section {
                 RootStatusCard(
                     rootInfo = rootInfo,
                     onNavigateRoot = {
@@ -248,7 +261,7 @@ fun HomeScreen(
             }
 
             // Storage Overview Section
-            item {
+            section {
                 Text(
                     text = str(R.string.device_storage),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -273,7 +286,7 @@ fun HomeScreen(
             }
 
             // Quick Categories Grid
-            item {
+            section {
                 Text(
                     text = str(R.string.categories),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -303,7 +316,7 @@ fun HomeScreen(
             }
 
             // Quick Jumps
-            item {
+            section {
                 Text(
                     text = str(R.string.quick_access),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -353,7 +366,7 @@ fun HomeScreen(
             }
 
             if (favorites.isNotEmpty()) {
-                item {
+                section {
                     Text(
                         text = str(R.string.favorites),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -391,7 +404,7 @@ fun HomeScreen(
             }
 
             // Tools & Utilities
-            item {
+            section {
                 Text(
                     text = str(R.string.tools),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -489,7 +502,7 @@ fun HomeScreen(
             }
 
             // Network Storage & Servers (Samba, SFTP, FTP)
-            item {
+            section {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -511,7 +524,7 @@ fun HomeScreen(
             }
 
             if (servers.isEmpty()) {
-                item {
+                section {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -562,7 +575,7 @@ fun HomeScreen(
                 }
             }
 
-            item {
+            section {
                 Spacer(modifier = Modifier.height(30.dp))
             }
         }

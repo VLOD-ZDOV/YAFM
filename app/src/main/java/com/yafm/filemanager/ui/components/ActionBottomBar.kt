@@ -35,6 +35,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
@@ -87,40 +89,26 @@ fun ActionBottomBar(
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = str(R.string.selected, selectedCount),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    Row {
-                        TextButton(onClick = onSelectAll) {
-                            Icon(Icons.Default.SelectAll, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(str(R.string.all))
-                        }
-                        IconButton(onClick = onClearSelection) {
-                            Icon(Icons.Default.Close, contentDescription = str(R.string.cancel))
-                        }
+            val count = @Composable {
+                Text(
+                    text = str(R.string.selected, selectedCount),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            val allAndClose = @Composable {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onSelectAll) {
+                        Icon(Icons.Default.SelectAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(str(R.string.all))
+                    }
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Default.Close, contentDescription = str(R.string.cancel))
                     }
                 }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
+            }
+            val actions = @Composable {
                     if (hasArchiveSelected) {
                         ActionButton(icon = Icons.Default.Unarchive, label = str(R.string.extract), onClick = onExtract)
                     }
@@ -148,6 +136,39 @@ fun ActionBottomBar(
                             }
                         }
                     }
+            }
+            // Landscape has little height: everything goes in one row.
+            if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    count()
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceEvenly) { actions() }
+                    allAndClose()
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        count()
+                        allAndClose()
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) { actions() }
                 }
             }
         }

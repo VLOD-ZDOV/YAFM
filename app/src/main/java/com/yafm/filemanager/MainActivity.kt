@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -201,7 +205,16 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
     // Only a bar that is really shown takes over the navigation bar's space; without music the
     // screen above must keep clear of it itself.
     var miniShown by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
+    // In landscape the navigation bar and the camera cutout sit at a side: everything but the video
+    // (which plays edge to edge) keeps clear of them.
+    Column(
+        Modifier
+            .fillMaxSize()
+            .then(
+                if (currentScreen is AppScreen.VideoPlayer) Modifier
+                else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            )
+    ) {
     Box(
         Modifier
             .weight(1f)
