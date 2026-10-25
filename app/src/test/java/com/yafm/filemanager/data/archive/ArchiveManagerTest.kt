@@ -39,6 +39,25 @@ class ArchiveManagerTest {
     }
 
     @Test
+    fun existingFilesAreKeptSkippedOrReplaced() = runBlocking {
+        val archive = File(base, "out.zip")
+        ArchiveManager.createArchive(listOf(src), archive, ArchiveManager.Format.ZIP)
+        val out = File(base, "x").apply { File(this, "data").mkdirs() }
+        val mine = File(out, "data/a.txt").apply { writeText("mine") }
+
+        ArchiveManager.extractArchive(archive, out, ArchiveManager.Conflict.KEEP_BOTH)
+        assertEquals("mine", mine.readText())
+        assertEquals("hello", File(out, "data/a (1).txt").readText())
+
+        ArchiveManager.extractArchive(archive, out, ArchiveManager.Conflict.SKIP)
+        assertEquals("mine", mine.readText())
+        assertFalse(File(out, "data/a (2).txt").exists())
+
+        ArchiveManager.extractArchive(archive, out, ArchiveManager.Conflict.REPLACE)
+        assertEquals("hello", mine.readText())
+    }
+
+    @Test
     fun everyFormatRoundTrips() = runBlocking {
         ArchiveManager.Format.entries.forEach { format ->
             val archive = File(base, "out${format.extension}")

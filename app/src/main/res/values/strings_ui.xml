@@ -371,4 +371,7 @@
     <string name="draw">Draw</string>
     <string name="edit_image">Edit</string>
     <string name="save_changes">Save the changes?</string>
+    <string name="folder_not_empty">The folder is not empty. Files with the same name:</string>
+    <string name="keep_both">Keep both</string>
+    <string name="skip">Skip</string>
 </resources>

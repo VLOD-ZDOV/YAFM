@@ -573,12 +573,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _location.value.takeIf { it.type == StorageType.LOCAL }?.path
             ?: Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
 
-    fun extractArchive(archiveItem: FileItem, targetDir: String, onDone: () -> Unit) {
+    fun extractArchive(archiveItem: FileItem, targetDir: String, conflict: ArchiveManager.Conflict, onDone: () -> Unit) {
         viewModelScope.launch {
             _isArchiveProcessing.value = true
             try {
                 val src = repository.materialize(archiveItem)
-                ArchiveManager.extractArchive(src, File(targetDir)) { _archiveProgress.value = it }
+                ArchiveManager.extractArchive(src, File(targetDir), conflict) { _archiveProgress.value = it }
                 onDone()
             } catch (e: Exception) {
                 _messages.tryEmit(describe(e))
@@ -595,7 +595,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             _isArchiveProcessing.value = true
             try {
                 val sources = _selectedItems.value.map { repository.materialize(it) }
-                val dest = File(archiveOutputDir(), archiveName)
+                // An archive with this name already there is kept: the new one gets " (1)".
+                val dest = ArchiveManager.freeFile(File(archiveOutputDir(), archiveName))
+                if (dest.name != archiveName) _messages.tryEmit(str(R.string.saved_as, dest.name))
                 ArchiveManager.createArchive(sources, dest, format) { _archiveProgress.value = it }
                 clearSelection()
                 onDone()

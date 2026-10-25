@@ -73,8 +73,37 @@ object ArchiveManager {
     private fun isInside(file: File, dir: File): Boolean =
         file.canonicalPath.startsWith(dir.canonicalPath + File.separator)
 
-    suspend fun extractArchive(archiveFile: File, targetDirectory: File, onProgress: (Progress) -> Unit = {}) =
+    /** What happens to a file that is already in the target folder. */
+    enum class Conflict { KEEP_BOTH, SKIP, REPLACE }
+
+    // Set for the extraction that runs; extractions are one at a time.
+    @Volatile private var conflict = Conflict.KEEP_BOTH
+
+    /** Where [out] is written, or null to skip it. */
+    private fun resolve(out: File): File? = when {
+        !out.exists() -> out
+        conflict == Conflict.SKIP -> null
+        conflict == Conflict.REPLACE -> out
+        else -> freeFile(out)
+    }
+
+    /** "a.txt" -> "a (1).txt", the first name not taken. */
+    fun freeFile(file: File): File {
+        if (!file.exists()) return file
+        val dot = file.name.lastIndexOf('.').takeIf { it > 0 } ?: file.name.length
+        val base = file.name.substring(0, dot)
+        val ext = file.name.substring(dot)
+        return generateSequence(1) { it + 1 }.map { File(file.parentFile, "$base ($it)$ext") }.first { !it.exists() }
+    }
+
+    suspend fun extractArchive(
+        archiveFile: File,
+        targetDirectory: File,
+        onConflict: Conflict = Conflict.KEEP_BOTH,
+        onProgress: (Progress) -> Unit = {}
+    ) =
         withContext(Dispatchers.IO) {
+            conflict = onConflict
             targetDirectory.mkdirs()
             val magic = ByteArray(6)
             val read = FileInputStream(archiveFile).use { it.read(magic) }
@@ -114,7 +143,8 @@ object ArchiveManager {
                 } else {
                     out.parentFile?.mkdirs()
                     if (Files.isSymbolicLink(out.toPath())) continue
-                    BufferedOutputStream(FileOutputStream(out), 64 * 1024).use { bos ->
+                    val dest = resolve(out) ?: continue
+                    BufferedOutputStream(FileOutputStream(dest), 64 * 1024).use { bos ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             val n = seven.read(buffer)
@@ -190,7 +220,8 @@ object ArchiveManager {
         out.parentFile?.mkdirs()
         // An existing link at the target would be written through.
         if (Files.isSymbolicLink(out.toPath())) return
-        BufferedOutputStream(FileOutputStream(out), 64 * 1024).use { input.copyTo(it, 64 * 1024) }
+        val dest = resolve(out) ?: return
+        BufferedOutputStream(FileOutputStream(dest), 64 * 1024).use { input.copyTo(it, 64 * 1024) }
     }
 
     suspend fun createArchive(

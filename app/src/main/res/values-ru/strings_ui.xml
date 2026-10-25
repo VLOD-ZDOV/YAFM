@@ -371,4 +371,7 @@
     <string name="draw">Рисовать</string>
     <string name="edit_image">Редактировать</string>
     <string name="save_changes">Сохранить изменения?</string>
+    <string name="folder_not_empty">Папка не пустая. Файлы с тем же именем:</string>
+    <string name="keep_both">Оставить оба</string>
+    <string name="skip">Пропустить</string>
 </resources>

@@ -277,8 +277,8 @@ fun ExplorerScreen(
             progress = archiveProgress,
             isExtracting = isArchiveProcessing,
             onDismiss = { extractTarget = null },
-            onExtract = { dest ->
-                viewModel.extractArchive(item, dest) {
+            onExtract = { dest, conflict ->
+                viewModel.extractArchive(item, dest, conflict) {
                     extractTarget = null
                     Toast.makeText(context, str(R.string.extracted_to, dest), Toast.LENGTH_SHORT).show()
                 }

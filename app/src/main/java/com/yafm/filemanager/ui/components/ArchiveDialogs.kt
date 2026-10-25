@@ -36,6 +36,7 @@ import com.yafm.filemanager.data.archive.ArchiveManager
 import com.yafm.filemanager.data.model.FileItem
 import java.io.File
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ExtractArchiveDialog(
     archiveItem: FileItem,
@@ -43,12 +44,15 @@ fun ExtractArchiveDialog(
     progress: ArchiveManager.Progress?,
     isExtracting: Boolean,
     onDismiss: () -> Unit,
-    onExtract: (destinationPath: String) -> Unit
+    onExtract: (destinationPath: String, conflict: ArchiveManager.Conflict) -> Unit
 ) {
     // "pack.tar.lz4" -> "pack": a tar inside a compressor loses both suffixes.
     val baseName = archiveItem.name.replace(Regex("(\\.tar)?\\.[^.]+$", RegexOption.IGNORE_CASE), "").ifEmpty { archiveItem.name }
     val defaultDest = File(currentPath, baseName).absolutePath
     var destPath by remember { mutableStateOf(defaultDest) }
+    var conflict by remember { mutableStateOf(ArchiveManager.Conflict.KEEP_BOTH) }
+    // The choice matters only when the folder already has something in it.
+    val targetBusy = remember(destPath) { File(destPath).list()?.isNotEmpty() == true }
 
     AlertDialog(
         onDismissRequest = { if (!isExtracting) onDismiss() },
@@ -94,12 +98,25 @@ fun ExtractArchiveDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (targetBusy) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(str(R.string.folder_not_empty), style = MaterialTheme.typography.bodySmall)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(
+                                ArchiveManager.Conflict.KEEP_BOTH to R.string.keep_both,
+                                ArchiveManager.Conflict.SKIP to R.string.skip,
+                                ArchiveManager.Conflict.REPLACE to R.string.replace_original
+                            ).forEach { (choice, label) ->
+                                FilterChip(selected = conflict == choice, onClick = { conflict = choice }, label = { Text(str(label)) })
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             if (!isExtracting) {
-                Button(onClick = { onExtract(destPath) }) {
+                Button(onClick = { onExtract(destPath, if (targetBusy) conflict else ArchiveManager.Conflict.KEEP_BOTH) }) {
                     Text(str(R.string.extract))
                 }
             }
