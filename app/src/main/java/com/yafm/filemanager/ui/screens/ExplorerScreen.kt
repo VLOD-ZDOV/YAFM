@@ -186,6 +186,7 @@ fun ExplorerScreen(
     var detailsTarget by remember { mutableStateOf<FileItem?>(null) }
     var videoChoice by remember { mutableStateOf<FileItem?>(null) }
     var linkTarget by remember { mutableStateOf<FileItem?>(null) }
+    var stripTargets by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     val advanced = viewModel.settings.settings.collectAsState().value.advanced
 
     fun playBuiltIn(item: FileItem) {
@@ -379,6 +380,21 @@ fun ExplorerScreen(
                 viewModel.changePermissions(item, octal)
                 permissionsTarget = null
             }
+        )
+    }
+
+    if (stripTargets.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { stripTargets = emptyList() },
+            title = { Text(str(R.string.remove_metadata)) },
+            text = { Text(str(R.string.remove_metadata_hint, stripTargets.size)) },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.stripMetadata(stripTargets)
+                    stripTargets = emptyList()
+                }) { Text(str(R.string.remove_metadata)) }
+            },
+            dismissButton = { TextButton(onClick = { stripTargets = emptyList() }) { Text(str(R.string.cancel)) } }
         )
     }
 
@@ -690,6 +706,8 @@ fun ExplorerScreen(
                             if (single.isDirectory) add(str(R.string.add_to_favorites) to { viewModel.clearSelection(); viewModel.addFavorite(single) })
                             if (advanced) add(str(R.string.create_link) to { viewModel.clearSelection(); linkTarget = single })
                         }
+                        val photos = viewModel.strippable(selectedItems)
+                        if (photos.isNotEmpty()) add(str(R.string.remove_metadata) to { viewModel.clearSelection(); stripTargets = photos })
                         add(str(R.string.invert_selection) to { viewModel.invertSelection() })
                     }
                 )

@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.yafm.filemanager.YafmApp
 import com.yafm.filemanager.data.archive.ArchiveManager
 import com.yafm.filemanager.data.dupes.DuplicateFinder
+import com.yafm.filemanager.data.media.Metadata
 import com.yafm.filemanager.data.fs.joinPath
 import com.yafm.filemanager.data.model.FileCategory
 import com.yafm.filemanager.data.model.FileItem
@@ -548,6 +549,21 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun createFolder(name: String) = operation { repository.createDirectory(_location.value, name) }
 
     fun createNewFile(name: String) = operation { repository.createFile(_location.value, name) }
+
+    /** Photos whose details (date, place, camera) can be removed: local JPEG, PNG and WebP. */
+    fun strippable(items: Collection<FileItem>) =
+        items.filter { it.storageType == StorageType.LOCAL && !it.isDirectory && it.extension in Metadata.SUPPORTED }
+
+    fun stripMetadata(items: List<FileItem>) = operation(str(R.string.metadata_removed, items.size)) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            items.forEachIndexed { i, item ->
+                _progress.value = "${i + 1}/${items.size}: ${item.name}"
+                Metadata.strip(File(item.path))
+            }
+            // The gallery keeps its own copy of the dates and places until it looks again.
+            android.media.MediaScannerConnection.scanFile(getApplication(), items.map { it.path }.toTypedArray(), null, null)
+        }
+    }
 
     fun createLink(target: FileItem, name: String) = operation(str(R.string.link_created)) {
         repository.createLink(target, _location.value, name)

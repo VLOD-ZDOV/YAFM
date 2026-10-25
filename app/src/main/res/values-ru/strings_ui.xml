@@ -378,4 +378,7 @@
     <string name="show_in_folder">Показать в папке</string>
     <string name="save_to_downloads">Сохранить в Загрузки</string>
     <string name="cannot_open_this_file">Этот файл здесь не открыть</string>
+    <string name="remove_metadata">Удалить метаданные</string>
+    <string name="remove_metadata_hint">Из фото (%1$d шт., JPEG, PNG, WebP) удалятся дата и место съёмки, модель телефона и комментарии. Сами картинки не изменятся. Отменить нельзя.</string>
+    <string name="metadata_removed">Метаданные удалены из фото: %1$d</string>
 </resources>
