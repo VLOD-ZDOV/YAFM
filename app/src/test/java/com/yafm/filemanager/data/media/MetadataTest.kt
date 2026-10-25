@@ -45,6 +45,15 @@ class MetadataTest {
     }
 
     @Test
+    fun jpegEndingRightAtItsEndMarker() {
+        val dirty = plainJpeg.copyOfRange(0, 2) + segment(0xE1, "Exif\u0000\u0000$secret".toByteArray()) +
+            plainJpeg.copyOfRange(2, plainJpeg.size)
+
+        assertTrue(Metadata.stripBytes(dirty).contentEquals(plainJpeg))
+        assertTrue(Metadata.stripBytes(plainJpeg).contentEquals(plainJpeg))
+    }
+
+    @Test
     fun pngLosesTextChunks() {
         val plain = plainPng
         val type = "tEXt".toByteArray()

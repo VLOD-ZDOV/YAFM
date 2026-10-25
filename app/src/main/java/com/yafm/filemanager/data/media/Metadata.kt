@@ -59,11 +59,13 @@ object Metadata {
         val out = ByteArrayOutputStream(d.size)
         out.write(d, 0, 2)
         var i = 2
-        while (i + 4 <= d.size) {
+        // The end marker usually takes the file's last two bytes: the loop must reach it.
+        while (i + 2 <= d.size) {
             if (d[i] != 0xFF.toByte()) throw IOException("Broken JPEG")
             val marker = d[i + 1].toInt() and 0xFF
             if (marker == 0xFF) { i++; continue }
             if (marker == 0xD9) { out.write(d, i, 2); return out.toByteArray() }
+            if (i + 4 > d.size) break
             val length = u16(d, i + 2)
             val end = i + 2 + length
             if (length < 2 || end > d.size) throw IOException("Broken JPEG")
