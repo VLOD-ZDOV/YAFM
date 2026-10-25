@@ -56,6 +56,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -273,7 +274,9 @@ fun TextEditorScreen(
         } else {
             val vScrollState = rememberScrollState()
             val hScrollState = rememberScrollState()
-            val linesCount = remember(content) { content.lines().size.coerceAtLeast(1) }
+            val linesCount = remember(content) { countLines(content) }
+            // One text for all the numbers: a composable per line would be thousands of them in a long file.
+            val lineNumbers = remember(linesCount) { (1..linesCount).joinToString("\n") }
 
             Row(
                 modifier = Modifier
@@ -294,17 +297,16 @@ fun TextEditorScreen(
                             .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.End
                     ) {
-                        for (i in 1..linesCount) {
-                            Text(
-                                text = "$i",
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = fontSize.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    lineHeight = (fontSize * 1.4f).sp
-                                )
+                        Text(
+                            text = lineNumbers,
+                            textAlign = TextAlign.End,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = fontSize.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                lineHeight = (fontSize * 1.4f).sp
                             )
-                        }
+                        )
                     }
                 }
 
@@ -335,4 +337,14 @@ fun TextEditorScreen(
             }
         }
     }
+}
+
+/** Lines as String.lines() counts them (\n, \r\n or \r), without making a string of each. */
+private fun countLines(text: String): Int {
+    var lines = 1
+    for (i in text.indices) {
+        val c = text[i]
+        if (c == '\n' || (c == '\r' && text.getOrNull(i + 1) != '\n')) lines++
+    }
+    return lines
 }
