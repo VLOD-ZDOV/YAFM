@@ -82,16 +82,20 @@ object Metadata {
     }
 
     private fun keepJpegSegment(marker: Int, d: ByteArray, at: Int, size: Int): Boolean = when (marker) {
-        0xE0 -> true // JFIF
+        // JFIF without a thumbnail: a thumbnail may still show the picture before it was cropped.
+        0xE0 -> size == 14 && String(d, at, 5, Charsets.US_ASCII) == "JFIF\u0000"
         0xE2 -> size >= 12 && String(d, at, 12, Charsets.US_ASCII) == "ICC_PROFILE\u0000"
         0xEE -> true // Adobe: how the colors are stored
         in 0xE1..0xEF, 0xFE -> false
         else -> true
     }
 
-    /** Drops text, EXIF and time chunks; the picture and color chunks stay. */
+    // Only what drawing the picture needs; text, EXIF, time, content credentials and private chunks go.
+    private val PNG_KEEP = setOf(
+        "IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "bKGD", "pHYs", "acTL", "fcTL", "fdAT"
+    )
+
     private fun stripPng(d: ByteArray): ByteArray {
-        val drop = setOf("tEXt", "zTXt", "iTXt", "eXIf", "tIME")
         val out = ByteArrayOutputStream(d.size)
         out.write(d, 0, 8)
         var i = 8
@@ -101,14 +105,16 @@ object Metadata {
             val type = String(d, i + 4, 4, Charsets.US_ASCII)
             val end = i + 12 + length
             if (length < 0 || end > d.size) throw IOException("Broken PNG")
-            if (type !in drop) out.write(d, i, end - i)
+            if (type in PNG_KEEP) out.write(d, i, end - i)
             i = end
             if (type == "IEND") return out.toByteArray()
         }
         throw IOException("Broken PNG")
     }
 
-    /** Drops the EXIF and XMP chunks and their flags in the extended header. */
+    private val WEBP_KEEP = setOf("VP8 ", "VP8L", "VP8X", "ALPH", "ANIM", "ANMF", "ICCP")
+
+    /** Keeps only the picture chunks; EXIF, XMP and anything unknown go, with their header flags. */
     private fun stripWebp(d: ByteArray): ByteArray {
         val body = ByteArrayOutputStream(d.size)
         var i = 12
@@ -119,7 +125,7 @@ object Metadata {
             val end = i + 8 + size + (size and 1)
             if (size < 0 || i + 8 + size > d.size) throw IOException("Broken WebP")
             when (fourcc) {
-                "EXIF", "XMP " -> {}
+                !in WEBP_KEEP -> {}
                 "VP8X" -> {
                     val chunk = d.copyOfRange(i, minOf(end, d.size))
                     chunk[8] = (chunk[8].toInt() and 0x08.inv() and 0x04.inv()).toByte()

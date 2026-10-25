@@ -52,7 +52,12 @@ class MetadataTest {
         val crc = CRC32().apply { update(type); update(data) }.value
         val chunk = byteArrayOf(0, 0, (data.size shr 8).toByte(), data.size.toByte()) + type + data +
             byteArrayOf((crc shr 24).toByte(), (crc shr 16).toByte(), (crc shr 8).toByte(), crc.toByte())
-        val dirty = plain.copyOfRange(0, 33) + chunk + plain.copyOfRange(33, plain.size)
+        // A private chunk (lower-case first letter), like C2PA's content credentials.
+        val credType = "caBX".toByteArray()
+        val credCrc = CRC32().apply { update(credType); update(data) }.value
+        val credentials = byteArrayOf(0, 0, (data.size shr 8).toByte(), data.size.toByte()) + credType + data +
+            byteArrayOf((credCrc shr 24).toByte(), (credCrc shr 16).toByte(), (credCrc shr 8).toByte(), credCrc.toByte())
+        val dirty = plain.copyOfRange(0, 33) + chunk + credentials + plain.copyOfRange(33, plain.size)
 
         val clean = Metadata.stripBytes(dirty)
 
@@ -68,7 +73,8 @@ class MetadataTest {
             return fourcc.toByteArray() + byteArrayOf(n.toByte(), (n shr 8).toByte(), (n shr 16).toByte(), (n shr 24).toByte()) + payload + pad
         }
         val vp8x = chunk("VP8X", byteArrayOf(0x0C, 0, 0, 0, 39, 0, 0, 29, 0, 0))
-        val body = vp8x + chunk("VP8L", ByteArray(21) { 1 }) + chunk("EXIF", secret.toByteArray()) + chunk("XMP ", secret.toByteArray())
+        val body = vp8x + chunk("VP8L", ByteArray(21) { 1 }) + chunk("EXIF", secret.toByteArray()) +
+            chunk("XMP ", secret.toByteArray()) + chunk("C2PA", secret.toByteArray())
         val size = body.size + 4
         val dirty = "RIFF".toByteArray() + byteArrayOf(size.toByte(), (size shr 8).toByte(), 0, 0) + "WEBP".toByteArray() + body
 
