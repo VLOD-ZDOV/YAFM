@@ -33,6 +33,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Files
+import java.nio.file.LinkOption
 
 /**
  * Archives by content, not by name: the format is detected from the file's first bytes, so a
@@ -79,21 +80,27 @@ object ArchiveManager {
     // Set for the extraction that runs; extractions are one at a time.
     @Volatile private var conflict = Conflict.KEEP_BOTH
 
-    /** Where [out] is written, or null to skip it. */
-    private fun resolve(out: File): File? = when {
-        !out.exists() -> out
-        conflict == Conflict.SKIP -> null
-        conflict == Conflict.REPLACE -> out
-        else -> freeFile(out)
+    /** Where [out] is written, or null to skip it. Never a link: writing would go where it points. */
+    private fun resolve(out: File): File? {
+        val dest = when {
+            !taken(out) -> out
+            conflict == Conflict.SKIP -> null
+            conflict == Conflict.REPLACE -> out
+            else -> freeFile(out)
+        }
+        return dest?.takeIf { !Files.isSymbolicLink(it.toPath()) }
     }
+
+    // A dangling link "does not exist" to File.exists(); it still takes the name.
+    private fun taken(file: File) = Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)
 
     /** "a.txt" -> "a (1).txt", the first name not taken. */
     fun freeFile(file: File): File {
-        if (!file.exists()) return file
+        if (!taken(file)) return file
         val dot = file.name.lastIndexOf('.').takeIf { it > 0 } ?: file.name.length
         val base = file.name.substring(0, dot)
         val ext = file.name.substring(dot)
-        return generateSequence(1) { it + 1 }.map { File(file.parentFile, "$base ($it)$ext") }.first { !it.exists() }
+        return generateSequence(1) { it + 1 }.map { File(file.parentFile, "$base ($it)$ext") }.first { !taken(it) }
     }
 
     suspend fun extractArchive(

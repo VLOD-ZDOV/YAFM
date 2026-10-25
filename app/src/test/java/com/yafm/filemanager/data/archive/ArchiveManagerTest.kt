@@ -58,6 +58,22 @@ class ArchiveManagerTest {
     }
 
     @Test
+    fun keepingBothNeverWritesThroughALink() = runBlocking {
+        val archive = File(base, "out.zip")
+        ArchiveManager.createArchive(listOf(src), archive, ArchiveManager.Format.ZIP)
+        val out = File(base, "x").apply { File(this, "data").mkdirs() }
+        File(out, "data/a.txt").writeText("mine")
+        val victim = File(base, "victim.txt")
+        // A dangling link on the name a second copy would get.
+        Files.createSymbolicLink(File(out, "data/a (1).txt").toPath(), victim.toPath())
+
+        ArchiveManager.extractArchive(archive, out, ArchiveManager.Conflict.KEEP_BOTH)
+
+        assertFalse("nothing written through the link", victim.exists())
+        assertEquals("hello", File(out, "data/a (2).txt").readText())
+    }
+
+    @Test
     fun everyFormatRoundTrips() = runBlocking {
         ArchiveManager.Format.entries.forEach { format ->
             val archive = File(base, "out${format.extension}")
