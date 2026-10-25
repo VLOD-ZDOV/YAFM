@@ -25,7 +25,7 @@ object Incoming {
             "file" -> {
                 val file = uri.path?.let { File(it) }?.takeIf { it.canRead() && isShared(it) }
                     ?: throw IOException(str(R.string.cannot_open_this_file))
-                return@withContext IncomingFile(file, false)
+                return@withContext IncomingFile(file.canonicalFile, false)
             }
             "content" -> if (isOwnProvider(context, uri)) throw IOException(str(R.string.cannot_open_this_file))
             else -> throw IOException(str(R.string.cannot_open_this_file))

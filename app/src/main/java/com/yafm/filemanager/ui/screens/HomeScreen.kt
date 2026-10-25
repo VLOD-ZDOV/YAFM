@@ -323,7 +323,7 @@ fun HomeScreen(
                     ) {
                         Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("/sdcard", fontSize = 12.sp)
+                        Text("/sdcard", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
 
                     FilledTonalButton(
@@ -335,7 +335,7 @@ fun HomeScreen(
                     ) {
                         Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp), tint = RootColor)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("/system", fontSize = 12.sp)
+                        Text("/system", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
 
                     FilledTonalButton(
@@ -347,7 +347,7 @@ fun HomeScreen(
                     ) {
                         Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp), tint = RootColor)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("/data", fontSize = 12.sp)
+                        Text("/data", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
