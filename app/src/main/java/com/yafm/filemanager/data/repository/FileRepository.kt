@@ -91,7 +91,10 @@ class FileRepository(context: Context) {
         }
     }
 
-    suspend fun readText(item: FileItem): String = io {
+    suspend fun readText(item: FileItem): String = readBytes(item).toString(Charsets.UTF_8)
+
+    /** The whole file, for the editor; files over [MAX_TEXT_SIZE] are refused. */
+    suspend fun readBytes(item: FileItem): ByteArray = io {
         val tooBig = IOException(str(R.string.the_file_is_over_mb_open_it_in_another_a, MAX_TEXT_SIZE / 1024 / 1024))
         if (item.size > MAX_TEXT_SIZE) throw tooBig
         // The listed size comes from the server and may be wrong: the limit holds for what is actually read.
@@ -105,7 +108,11 @@ class FileRepository(context: Context) {
                 if (out.size() > MAX_TEXT_SIZE) throw tooBig
             }
         }
-        out.toString(Charsets.UTF_8.name())
+        out.toByteArray()
+    }
+
+    suspend fun writeBytes(item: FileItem, data: ByteArray) = io {
+        fs(item).openWrite(item.path).use { it.write(data) }
     }
 
     suspend fun writeText(item: FileItem, text: String) = io {

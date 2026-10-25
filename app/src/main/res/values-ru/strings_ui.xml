@@ -394,4 +394,9 @@
     <string name="as_music">Музыку</string>
     <string name="not_found_in_archive">В архиве нет «%1$s»</string>
     <string name="extract_all">Распаковать всё</string>
+    <string name="read_only">Только чтение</string>
+    <string name="binary_file_hint">Это не текстовый файл: он показан как есть, сохранять его здесь нельзя, иначе он сломается.</string>
+    <string name="read_as">Читать как</string>
+    <string name="convert_to_utf8">Сохранить в UTF-8</string>
+    <string name="does_not_fit_encoding">Не все символы помещаются в %1$s: сохраните в UTF-8</string>
 </resources>

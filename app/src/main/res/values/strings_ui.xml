@@ -394,4 +394,9 @@
     <string name="as_music">Music</string>
     <string name="not_found_in_archive">“%1$s” is not in the archive</string>
     <string name="extract_all">Extract all</string>
+    <string name="read_only">Read only</string>
+    <string name="binary_file_hint">This is not a text file: it is shown as is and cannot be saved here, or it would break.</string>
+    <string name="read_as">Read as</string>
+    <string name="convert_to_utf8">Save as UTF-8</string>
+    <string name="does_not_fit_encoding">Some characters do not fit %1$s: save as UTF-8</string>
 </resources>

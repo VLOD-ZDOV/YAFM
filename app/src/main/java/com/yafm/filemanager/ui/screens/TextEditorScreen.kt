@@ -45,6 +45,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import com.yafm.filemanager.data.fs.TextEncoding
+import java.nio.charset.Charset
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -80,7 +85,15 @@ fun TextEditorScreen(
     var loadFailed by remember { mutableStateOf(false) }
     var fontSize by remember { mutableFloatStateOf(13f) }
 
-    val isModified = content != originalContent
+    // The file's bytes and how they are read; null charset: a binary file, shown but never saved.
+    var bytes by remember { mutableStateOf(ByteArray(0)) }
+    var readCharset by remember { mutableStateOf<Charset?>(Charsets.UTF_8) }
+    var saveCharset by remember { mutableStateOf<Charset>(Charsets.UTF_8) }
+    var showEncodings by remember { mutableStateOf(false) }
+    val binary = readCharset == null
+
+    // Converting to another encoding is a change too, even with the same text.
+    val isModified = content != originalContent || (readCharset != null && saveCharset != readCharset)
 
     var confirmLeave by remember { mutableStateOf(false) }
 
@@ -88,7 +101,13 @@ fun TextEditorScreen(
         isSaving = true
         scope.launch {
             try {
-                repository.writeText(fileItem, content)
+                val encoded = TextEncoding.encode(content, saveCharset)
+                    ?: throw java.io.IOException(str(R.string.does_not_fit_encoding, saveCharset.name()))
+                // A byte order mark stays when the encoding stays.
+                val data = (if (saveCharset == readCharset) TextEncoding.bom(bytes) else ByteArray(0)) + encoded
+                repository.writeBytes(fileItem, data)
+                bytes = data
+                readCharset = saveCharset
                 originalContent = content
                 Toast.makeText(context, str(R.string.file_saved), Toast.LENGTH_SHORT).show()
                 then()
@@ -101,7 +120,7 @@ fun TextEditorScreen(
     }
 
     // Unsaved text is asked about, not lost.
-    fun leave() = if (isModified && !loadFailed) confirmLeave = true else onNavigateBack()
+    fun leave() = if (isModified && !loadFailed && !binary) confirmLeave = true else onNavigateBack()
 
     BackHandler { leave() }
 
@@ -122,7 +141,12 @@ fun TextEditorScreen(
     LaunchedEffect(fileItem.path) {
         isLoading = true
         try {
-            val text = repository.readText(fileItem)
+            val data = repository.readBytes(fileItem)
+            val charset = TextEncoding.detect(data)
+            bytes = data
+            readCharset = charset
+            saveCharset = charset ?: Charsets.UTF_8
+            val text = TextEncoding.decode(data, charset ?: Charsets.ISO_8859_1)
             content = text
             originalContent = text
         } catch (e: Exception) {
@@ -168,6 +192,46 @@ fun TextEditorScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        TextButton(onClick = { showEncodings = true }, enabled = !isLoading && !loadFailed) {
+                            Text(
+                                if (binary) str(R.string.read_only) else if (saveCharset != readCharset) "→ ${saveCharset.name()}" else readCharset!!.name(),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        DropdownMenu(expanded = showEncodings, onDismissRequest = { showEncodings = false }) {
+                            if (binary) {
+                                Text(
+                                    str(R.string.binary_file_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            } else {
+                                Text(str(R.string.read_as), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                                TextEncoding.CHOICES.forEach { cs ->
+                                    DropdownMenuItem(
+                                        text = { Text(cs.name()) },
+                                        trailingIcon = { if (cs == readCharset) Icon(Icons.Default.Check, contentDescription = null) },
+                                        // Reading again in another encoding would drop unsaved edits.
+                                        enabled = content == originalContent,
+                                        onClick = {
+                                            showEncodings = false
+                                            readCharset = cs
+                                            saveCharset = cs
+                                            content = TextEncoding.decode(bytes, cs)
+                                            originalContent = content
+                                        }
+                                    )
+                                }
+                                if (readCharset != Charsets.UTF_8) {
+                                    DropdownMenuItem(
+                                        text = { Text(str(R.string.convert_to_utf8)) },
+                                        onClick = { showEncodings = false; saveCharset = Charsets.UTF_8 }
+                                    )
+                                }
+                            }
+                        }
+                    }
                     IconButton(
                         onClick = {
                             fontSize = if (fontSize >= 18f) 11f else fontSize + 2f
@@ -178,7 +242,7 @@ fun TextEditorScreen(
 
                     IconButton(
                         onClick = { save() },
-                        enabled = isModified && !isSaving && !loadFailed
+                        enabled = isModified && !isSaving && !loadFailed && !binary
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -254,6 +318,7 @@ fun TextEditorScreen(
                     BasicTextField(
                         value = content,
                         onValueChange = { content = it },
+                        readOnly = binary,
                         textStyle = TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = fontSize.sp,
