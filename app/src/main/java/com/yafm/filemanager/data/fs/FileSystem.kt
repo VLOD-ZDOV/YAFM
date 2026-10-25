@@ -24,6 +24,9 @@ interface FileSystem : Closeable {
 
     fun chmod(path: String, mode: Int): Unit = throw UnsupportedOperationException(str(R.string.changing_permissions_is_not_supported))
 
+    /** A symbolic link at [linkPath] to [target]. */
+    fun symlink(target: String, linkPath: String): Unit = throw UnsupportedOperationException(str(R.string.links_not_supported))
+
     /** Recursive delete that removes links themselves, never what they point to. */
     fun delete(item: FileItem) {
         if (item.isDirectory && !item.isSymlink) {

@@ -377,6 +377,11 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _selectedItems.value = if (current.containsAll(group)) current - group.toSet() else current + group
     }
 
+    fun invertSelection() {
+        val current = _selectedItems.value
+        _selectedItems.value = fileList.value.filterNot { it in current }.toSet()
+    }
+
     fun selectAll() {
         _selectedItems.value = fileList.value.toSet()
     }
@@ -460,8 +465,29 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun createNewFile(name: String) = operation { repository.createFile(_location.value, name) }
 
+    fun createLink(target: FileItem, name: String) = operation(str(R.string.link_created)) {
+        repository.createLink(target, _location.value, name)
+    }
+
     fun changePermissions(item: FileItem, octal: String) = operation(str(R.string.permissions_changed)) {
         repository.changePermissions(item, octal)
+    }
+
+    /** Local files for sharing; remote ones are fetched to the cache first. Folders are left out. */
+    fun withLocalCopies(items: List<FileItem>, onReady: (List<File>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val files = items.filter { !it.isDirectory }.mapIndexed { i, item ->
+                    _progress.value = str(R.string.loading, "${i + 1}/${items.size}: ${item.name}")
+                    repository.materialize(item)
+                }
+                onReady(files)
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            } finally {
+                _progress.value = null
+            }
+        }
     }
 
     /** Opens a file in a viewer or another app: remote files are fetched to the cache first. */

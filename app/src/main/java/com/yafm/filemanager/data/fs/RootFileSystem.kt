@@ -136,6 +136,7 @@ class RootFileSystem : FileSystem {
     override fun removeFile(path: String) { run("rm -f ${shellQuote(path)}") }
     override fun removeDir(path: String) { run("rmdir ${shellQuote(path)}") }
     override fun delete(item: FileItem) { run("rm -rf ${shellQuote(item.path)}") }
+    override fun symlink(target: String, linkPath: String) { run("ln -s ${shellQuote(target)} ${shellQuote(linkPath)}") }
     override fun chmod(path: String, mode: Int) { run("chmod ${Integer.toOctalString(mode)} ${shellQuote(path)}") }
 
     override fun copyWithin(source: FileItem, destPath: String): Boolean {

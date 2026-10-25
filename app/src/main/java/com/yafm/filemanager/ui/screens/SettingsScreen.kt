@@ -140,6 +140,11 @@ fun SettingsScreen(
                 viewModel.settings.update { it.copy(videoSideGestures = on) }
             }
 
+            Section(str(R.string.advanced_user))
+            Toggle(str(R.string.advanced_user_hint), settings.advanced) { on ->
+                viewModel.settings.update { it.copy(advanced = on) }
+            }
+
             Section(str(R.string.this_phone_s_qsh_key))
             Text(
                 str(R.string.qsh_servers_are_signed_in_to_with_this_k),

@@ -124,6 +124,12 @@ class FileRepository(context: Context) {
         fs(location).mkdir(joinPath(location.path, name))
     }
 
+    /** A link named [name] in [location] to [target], which is in the same storage. */
+    suspend fun createLink(target: FileItem, location: Location, name: String) = io {
+        checkName(name)
+        fs(location).symlink(target.path, joinPath(location.path, name))
+    }
+
     suspend fun createFile(location: Location, name: String) = io {
         checkName(name)
         fs(location).createFile(joinPath(location.path, name))

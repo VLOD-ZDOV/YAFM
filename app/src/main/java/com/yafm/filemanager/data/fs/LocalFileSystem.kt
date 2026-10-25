@@ -73,6 +73,8 @@ class LocalFileSystem(
 
     override fun chmod(path: String, mode: Int) = orRoot({ Os.chmod(path, mode) }, { root.chmod(path, mode) })
 
+    override fun symlink(target: String, linkPath: String) = orRoot({ Os.symlink(target, linkPath) }, { root.symlink(target, linkPath) })
+
     private fun File.toItem(): FileItem {
         val isDir = isDirectory
         val isLink = Files.isSymbolicLink(toPath())

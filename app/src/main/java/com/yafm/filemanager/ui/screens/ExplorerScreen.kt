@@ -184,6 +184,8 @@ fun ExplorerScreen(
     var permissionsTarget by remember { mutableStateOf<FileItem?>(null) }
     var detailsTarget by remember { mutableStateOf<FileItem?>(null) }
     var videoChoice by remember { mutableStateOf<FileItem?>(null) }
+    var linkTarget by remember { mutableStateOf<FileItem?>(null) }
+    val advanced = viewModel.settings.settings.collectAsState().value.advanced
 
     fun playBuiltIn(item: FileItem) {
         viewModel.withLocalCopy(item) { file ->
@@ -357,6 +359,28 @@ fun ExplorerScreen(
                 viewModel.changePermissions(item, octal)
                 permissionsTarget = null
             }
+        )
+    }
+
+    linkTarget?.let { item ->
+        var name by remember(item) { mutableStateOf(item.name) }
+        AlertDialog(
+            onDismissRequest = { linkTarget = null },
+            title = { Text(str(R.string.create_link)) },
+            text = {
+                Column {
+                    Text(str(R.string.link_hint, item.name), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(str(R.string.link_name)) }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.createLink(item, name.trim())
+                    linkTarget = null
+                }, enabled = name.isNotBlank()) { Text(str(R.string.create_link)) }
+            },
+            dismissButton = { TextButton(onClick = { linkTarget = null }) { Text(str(R.string.cancel)) } }
         )
     }
 
@@ -620,6 +644,19 @@ fun ExplorerScreen(
                     },
                     onBatchRename = {
                         showBatchRenameDialog = true
+                    },
+                    onShare = {
+                        viewModel.withLocalCopies(selectedItems.toList()) { files -> shareFiles(context, files) }
+                    },
+                    moreActions = buildList {
+                        val single = selectedItems.singleOrNull()
+                        if (single != null) {
+                            add(str(R.string.rename) to { viewModel.clearSelection(); renameTarget = single })
+                            if (!single.isDirectory) add(str(R.string.open_as_text) to { viewModel.clearSelection(); onOpenFileInEditor(single) })
+                            add(str(R.string.properties) to { viewModel.clearSelection(); detailsTarget = single })
+                            if (advanced) add(str(R.string.create_link) to { viewModel.clearSelection(); linkTarget = single })
+                        }
+                        add(str(R.string.invert_selection) to { viewModel.invertSelection() })
                     }
                 )
             }
@@ -824,6 +861,24 @@ private fun handleFileClick(
             onOpenImage(item.copy(path = file.absolutePath, storageType = StorageType.LOCAL, serverId = null))
         }
         else -> viewModel.withLocalCopy(item) { file -> openExternalIntent(context, item, file) }
+    }
+}
+
+private fun shareFiles(context: Context, files: List<File>) {
+    if (files.isEmpty()) return
+    try {
+        val uris = ArrayList(files.map { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it) })
+        val types = files.map { FileItem(it.name, it.path).mimeType }.distinct()
+        // One type for all files, or its family ("image/*"), or anything.
+        val type = types.singleOrNull() ?: types.map { it.substringBefore('/') }.distinct().singleOrNull()?.let { "$it/*" } ?: "*/*"
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        }.setType(type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(intent, str(R.string.share)))
+    } catch (e: Exception) {
+        Toast.makeText(context, str(R.string.could_not_open_the_file, e.message), Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -338,4 +338,14 @@
     <string name="expand_all">Expand all folders</string>
     <string name="collapse">Collapse</string>
     <string name="expand">Expand</string>
+    <string name="advanced_user">Advanced user</string>
+    <string name="advanced_user_hint">Show tools that can confuse other apps: creating links to files and folders</string>
+    <string name="links_not_supported">Links are not supported here</string>
+    <string name="link_created">Link created</string>
+    <string name="create_link">Create a link</string>
+    <string name="link_name">Link name</string>
+    <string name="link_hint">The link to “%1$s” is created in this folder.</string>
+    <string name="invert_selection">Invert selection</string>
+    <string name="open_as_text">Open as text</string>
+    <string name="more">More</string>
 </resources>

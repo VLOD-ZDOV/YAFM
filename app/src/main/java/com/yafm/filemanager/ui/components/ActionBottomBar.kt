@@ -35,6 +35,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +69,9 @@ fun ActionBottomBar(
     onExtract: () -> Unit = {},
     onCompress: () -> Unit = {},
     onBatchRename: () -> Unit = {},
+    onShare: () -> Unit = {},
+    /** Extra actions for the selection, shown under "More". */
+    moreActions: List<Pair<String, () -> Unit>> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -118,15 +130,24 @@ fun ActionBottomBar(
                     }
                     ActionButton(icon = Icons.Default.ContentCopy, label = str(R.string.copy), onClick = onCopy)
                     ActionButton(icon = Icons.Default.ContentCut, label = str(R.string.cut), onClick = onCut)
-                    if (canChangePermissions) {
-                        ActionButton(icon = Icons.Default.Lock, label = str(R.string.permissions), onClick = onPermissions)
-                    }
+                    ActionButton(icon = Icons.Default.Share, label = str(R.string.share), onClick = onShare)
                     ActionButton(
                         icon = Icons.Default.Delete,
                         label = str(R.string.delete),
                         onClick = onDelete,
                         tint = MaterialTheme.colorScheme.error
                     )
+                    // Permissions and the rest live here so the row fits a phone's width.
+                    Box {
+                        var open by remember { mutableStateOf(false) }
+                        ActionButton(icon = Icons.Default.MoreVert, label = str(R.string.more), onClick = { open = true })
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            val all = if (canChangePermissions) moreActions + (str(R.string.permissions) to onPermissions) else moreActions
+                            all.forEach { (label, action) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
+                            }
+                        }
+                    }
                 }
             }
         }

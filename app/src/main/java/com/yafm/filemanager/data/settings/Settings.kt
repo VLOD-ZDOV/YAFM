@@ -22,7 +22,9 @@ data class Settings(
     /** Brightness (left) and volume (right) swipes in the video player. */
     val videoSideGestures: Boolean = false,
     /** Folder headers folded in the categories, as "CATEGORY:folder". */
-    val collapsedFolders: Set<String> = emptySet()
+    val collapsedFolders: Set<String> = emptySet(),
+    /** Shows tools for people who know what they do: creating links. */
+    val advanced: Boolean = false
 )
 
 class SettingsRepository(context: Context) {
@@ -40,7 +42,8 @@ class SettingsRepository(context: Context) {
         gridView = prefs.getBoolean("gridView", false),
         seekSeconds = prefs.getInt("seekSeconds", 10),
         videoSideGestures = prefs.getBoolean("videoSideGestures", false),
-        collapsedFolders = prefs.getStringSet("collapsedFolders", null)?.toSet() ?: emptySet()
+        collapsedFolders = prefs.getStringSet("collapsedFolders", null)?.toSet() ?: emptySet(),
+        advanced = prefs.getBoolean("advanced", false)
     )
 
     // Per-folder sort orders live apart from the settings: there can be many of them.
@@ -69,6 +72,7 @@ class SettingsRepository(context: Context) {
             .putInt("seekSeconds", s.seekSeconds)
             .putBoolean("videoSideGestures", s.videoSideGestures)
             .putStringSet("collapsedFolders", s.collapsedFolders)
+            .putBoolean("advanced", s.advanced)
             .apply()
     }
 }

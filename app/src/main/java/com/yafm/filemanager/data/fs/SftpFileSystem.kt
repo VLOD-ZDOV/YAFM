@@ -118,6 +118,7 @@ class SftpFileSystem(
     override fun removeFile(path: String) = withChannel { it.rm(esc(path)) }
     override fun removeDir(path: String) = withChannel { it.rmdir(esc(path)) }
     override fun chmod(path: String, mode: Int) = withChannel { it.chmod(mode, esc(path)) }
+    override fun symlink(target: String, linkPath: String) = withChannel { it.symlink(esc(target), esc(linkPath)) }
 
     @Synchronized
     override fun close() {

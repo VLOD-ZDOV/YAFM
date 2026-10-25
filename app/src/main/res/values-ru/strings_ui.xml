@@ -338,4 +338,14 @@
     <string name="expand_all">Развернуть все папки</string>
     <string name="collapse">Свернуть</string>
     <string name="expand">Развернуть</string>
+    <string name="advanced_user">Продвинутый пользователь</string>
+    <string name="advanced_user_hint">Показать инструменты, которые могут запутать другие приложения: создание ссылок на файлы и папки</string>
+    <string name="links_not_supported">Здесь ссылки не поддерживаются</string>
+    <string name="link_created">Ссылка создана</string>
+    <string name="create_link">Создать ссылку</string>
+    <string name="link_name">Имя ссылки</string>
+    <string name="link_hint">Ссылка на «%1$s» будет создана в этой папке.</string>
+    <string name="invert_selection">Обратить выделение</string>
+    <string name="open_as_text">Открыть как текст</string>
+    <string name="more">Ещё</string>
 </resources>
