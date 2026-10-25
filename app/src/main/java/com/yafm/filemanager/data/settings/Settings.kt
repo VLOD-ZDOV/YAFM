@@ -24,7 +24,9 @@ data class Settings(
     /** Folder headers folded in the categories, as "CATEGORY:folder". */
     val collapsedFolders: Set<String> = emptySet(),
     /** Shows tools for people who know what they do: creating links. */
-    val advanced: Boolean = false
+    val advanced: Boolean = false,
+    /** Favorite folders, in the order added, as "TYPE\tserverId\tpath". */
+    val favorites: List<String> = emptyList()
 )
 
 class SettingsRepository(context: Context) {
@@ -43,7 +45,8 @@ class SettingsRepository(context: Context) {
         seekSeconds = prefs.getInt("seekSeconds", 10),
         videoSideGestures = prefs.getBoolean("videoSideGestures", false),
         collapsedFolders = prefs.getStringSet("collapsedFolders", null)?.toSet() ?: emptySet(),
-        advanced = prefs.getBoolean("advanced", false)
+        advanced = prefs.getBoolean("advanced", false),
+        favorites = prefs.getString("favorites", null)?.split('\n')?.filter { it.isNotEmpty() } ?: emptyList()
     )
 
     // Per-folder choices (sort, view, file types) live apart from the settings: there can be many of them.
@@ -73,6 +76,7 @@ class SettingsRepository(context: Context) {
             .putBoolean("videoSideGestures", s.videoSideGestures)
             .putStringSet("collapsedFolders", s.collapsedFolders)
             .putBoolean("advanced", s.advanced)
+            .putString("favorites", s.favorites.joinToString("\n"))
             .apply()
     }
 }

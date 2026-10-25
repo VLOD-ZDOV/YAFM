@@ -507,6 +507,16 @@ fun ExplorerScreen(
                                     }
                                 )
                             }
+                            if (location.category == null) {
+                                val favorite = viewModel.isFavorite(location)
+                                DropdownMenuItem(
+                                    text = { Text(if (favorite) str(R.string.remove_from_favorites) else str(R.string.add_to_favorites)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.toggleFavorite(location)
+                                    }
+                                )
+                            }
                             if (location.category != null) {
                                 val folders = FileExplorerViewModel.groupByFolder(fileList, location.path).mapNotNull { it.first }
                                 val allCollapsed = folders.isNotEmpty() && collapsedFolders.containsAll(folders)
@@ -654,6 +664,7 @@ fun ExplorerScreen(
                             add(str(R.string.rename) to { viewModel.clearSelection(); renameTarget = single })
                             if (!single.isDirectory) add(str(R.string.open_as_text) to { viewModel.clearSelection(); onOpenFileInEditor(single) })
                             add(str(R.string.properties) to { viewModel.clearSelection(); detailsTarget = single })
+                            if (single.isDirectory) add(str(R.string.add_to_favorites) to { viewModel.clearSelection(); viewModel.addFavorite(single) })
                             if (advanced) add(str(R.string.create_link) to { viewModel.clearSelection(); linkTarget = single })
                         }
                         add(str(R.string.invert_selection) to { viewModel.invertSelection() })

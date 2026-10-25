@@ -7,6 +7,14 @@ import androidx.compose.ui.res.stringResource
 import com.yafm.filemanager.R
 import android.os.Environment
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Close
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.yafm.filemanager.data.model.StorageType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,6 +124,8 @@ fun HomeScreen(
     val storageStats by viewModel.storageStats.collectAsState()
     val rootInfo by viewModel.rootInfo.collectAsState()
     val servers by viewModel.serverRepo.servers.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
+    val context = LocalContext.current
 
     var showAddServerDialog by remember { mutableStateOf(false) }
     var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
@@ -347,6 +357,44 @@ fun HomeScreen(
                         Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp), tint = RootColor)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("/data", fontSize = 12.sp)
+                    }
+                }
+            }
+
+            if (favorites.isNotEmpty()) {
+                item {
+                    Text(
+                        text = str(R.string.favorites),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        favorites.forEach { fav ->
+                            AssistChip(
+                                onClick = {
+                                    if (viewModel.openFavorite(fav)) onNavigateToExplorer()
+                                    else Toast.makeText(context, str(R.string.server_removed), Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text(fav.name, maxLines = 1) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp),
+                                        tint = if (fav.type == StorageType.ROOT) RootColor else MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = str(R.string.remove_from_favorites),
+                                        modifier = Modifier.size(16.dp).clickable { viewModel.removeFavorite(fav) }
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }

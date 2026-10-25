@@ -348,4 +348,9 @@
     <string name="invert_selection">Обратить выделение</string>
     <string name="open_as_text">Открыть как текст</string>
     <string name="more">Ещё</string>
+    <string name="favorites">Избранное</string>
+    <string name="add_to_favorites">В избранное</string>
+    <string name="remove_from_favorites">Убрать из избранного</string>
+    <string name="added_to_favorites">Добавлено в избранное</string>
+    <string name="server_removed">Сервер этой папки удалён</string>
 </resources>

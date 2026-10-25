@@ -264,6 +264,47 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    // Favorite folders: any storage, shown on the home screen.
+
+    data class Favorite(val type: StorageType, val serverId: String?, val path: String) {
+        val key get() = "${type.name}\t${serverId ?: ""}\t$path"
+        val name get() = path.trimEnd('/').substringAfterLast('/').ifEmpty { "/" }
+    }
+
+    private fun parseFavorite(key: String): Favorite? {
+        val parts = key.split('\t')
+        if (parts.size != 3) return null
+        val type = runCatching { StorageType.valueOf(parts[0]) }.getOrNull() ?: return null
+        return Favorite(type, parts[1].ifEmpty { null }, parts[2])
+    }
+
+    val favorites: StateFlow<List<Favorite>> = settings.settings.map { s -> s.favorites.mapNotNull { parseFavorite(it) } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private fun Location.favorite() = Favorite(type, server?.id, path)
+
+    fun isFavorite(location: Location) = location.category == null && location.favorite() in favorites.value
+
+    fun toggleFavorite(location: Location) {
+        val key = location.favorite().key
+        settings.update { s -> s.copy(favorites = if (key in s.favorites) s.favorites - key else s.favorites + key) }
+    }
+
+    fun addFavorite(item: FileItem) {
+        val key = Favorite(item.storageType, item.serverId, item.path).key
+        settings.update { s -> if (key in s.favorites) s else s.copy(favorites = s.favorites + key) }
+        _messages.tryEmit(str(R.string.added_to_favorites))
+    }
+
+    fun removeFavorite(favorite: Favorite) = settings.update { s -> s.copy(favorites = s.favorites - favorite.key) }
+
+    /** False when the favorite's server is gone. */
+    fun openFavorite(favorite: Favorite): Boolean {
+        val server = favorite.serverId?.let { serverRepo.getServer(it) ?: return false }
+        enter(Location(favorite.type, favorite.path, server))
+        return true
+    }
+
     fun navigateBack(): Boolean {
         val previous = history.removeLastOrNull() ?: return false
         show(previous)
