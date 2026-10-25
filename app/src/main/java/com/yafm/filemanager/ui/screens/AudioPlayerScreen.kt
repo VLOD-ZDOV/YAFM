@@ -100,24 +100,26 @@ fun AudioPlayerScreen(
     DisposableEffect(Unit) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
+        fun sync(player: Player) {
+            playing = player.isPlaying
+            duration = player.duration.coerceAtLeast(0L)
+            meta = player.mediaMetadata
+            index = player.currentMediaItemIndex
+            shuffle = player.shuffleModeEnabled
+            repeat = player.repeatMode
+        }
         val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) {
-                playing = player.isPlaying
-                duration = player.duration.coerceAtLeast(0L)
-                meta = player.mediaMetadata
-                index = player.currentMediaItemIndex
-                shuffle = player.shuffleModeEnabled
-                repeat = player.repeatMode
-            }
+            override fun onEvents(player: Player, events: Player.Events) = sync(player)
         }
         future.addListener({
             val c = future.get()
             controller = c
             c.addListener(listener)
+            // Events come only on changes: a track that already plays must be shown right away.
+            sync(c)
             if (file == null) {
                 // Opened from the notification: show the queue that plays.
                 queue = (0 until c.mediaItemCount).map { File(c.getMediaItemAt(it).mediaId) }
-                listener.onEvents(c, Player.Events(androidx.media3.common.FlagSet.Builder().build()))
                 return@addListener
             }
             val items = queue.map { f ->
