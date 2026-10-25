@@ -353,4 +353,21 @@
     <string name="remove_from_favorites">Remove from favorites</string>
     <string name="added_to_favorites">Added to favorites</string>
     <string name="server_removed">The server of this folder was removed</string>
+    <string name="undo">Undo</string>
+    <string name="resize">Resize</string>
+    <string name="discard_changes">Discard the changes?</string>
+    <string name="discard">Discard</string>
+    <string name="save_copy_or_replace">Save as a new file next to this one, or replace the original?</string>
+    <string name="save_copy_only">This picture is saved as a new file next to the original.</string>
+    <string name="save_copy">Save a copy</string>
+    <string name="replace_original">Replace</string>
+    <string name="saved_as">Saved: %1$s</string>
+    <string name="edited_downscaled">A large photo is edited at %1$d px on a side, so only a copy can be saved.</string>
+    <string name="brush">Brush</string>
+    <string name="rotate_left">Rotate left</string>
+    <string name="rotate_right">Rotate right</string>
+    <string name="flip_horizontal">Mirror</string>
+    <string name="flip_vertical">Flip upside down</string>
+    <string name="draw">Draw</string>
+    <string name="edit_image">Edit</string>
 </resources>

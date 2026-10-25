@@ -122,6 +122,7 @@ fun ExplorerScreen(
     onOpenImage: (FileItem) -> Unit,
     onOpenVideo: (java.io.File, List<java.io.File>) -> Unit,
     onOpenAudio: (java.io.File, List<java.io.File>) -> Unit,
+    onEditImage: (FileItem) -> Unit,
     onOpenDuplicates: () -> Unit
 ) {
     val context = LocalContext.current
@@ -662,6 +663,9 @@ fun ExplorerScreen(
                         val single = selectedItems.singleOrNull()
                         if (single != null) {
                             add(str(R.string.rename) to { viewModel.clearSelection(); renameTarget = single })
+                            if (single.category == FileCategory.IMAGE && single.storageType == StorageType.LOCAL) {
+                                add(str(R.string.edit_image) to { viewModel.clearSelection(); onEditImage(single) })
+                            }
                             if (!single.isDirectory) add(str(R.string.open_as_text) to { viewModel.clearSelection(); onOpenFileInEditor(single) })
                             add(str(R.string.properties) to { viewModel.clearSelection(); detailsTarget = single })
                             if (single.isDirectory) add(str(R.string.add_to_favorites) to { viewModel.clearSelection(); viewModel.addFavorite(single) })

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,7 +41,8 @@ import java.io.File
 @Composable
 fun ImageViewerScreen(
     fileItem: FileItem,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onEdit: () -> Unit
 ) {
     val context = LocalContext.current
     val imageFile = File(fileItem.path)
@@ -77,6 +79,12 @@ fun ImageViewerScreen(
                     }
                 },
                 actions = {
+                    // A copy fetched from a server lives in the cache: edits there would be lost.
+                    if (!imageFile.absolutePath.startsWith(context.cacheDir.absolutePath)) {
+                        IconButton(onClick = onEdit) {
+                            Icon(Icons.Default.Edit, contentDescription = str(R.string.edit_image), tint = Color.White)
+                        }
+                    }
                     IconButton(onClick = { shareImage(context, imageFile) }) {
                         Icon(
                             Icons.Default.Share,

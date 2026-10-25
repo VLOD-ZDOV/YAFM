@@ -38,6 +38,7 @@ import com.yafm.filemanager.ui.screens.AppManagerScreen
 import com.yafm.filemanager.ui.screens.ExplorerScreen
 import com.yafm.filemanager.ui.screens.HomeScreen
 import com.yafm.filemanager.ui.screens.ImageViewerScreen
+import com.yafm.filemanager.ui.screens.ImageEditorScreen
 import com.yafm.filemanager.ui.screens.RootTerminalScreen
 import com.yafm.filemanager.ui.screens.SettingsScreen
 import com.yafm.filemanager.ui.screens.VideoPlayerScreen
@@ -56,6 +57,7 @@ sealed class AppScreen {
     data object Explorer : AppScreen()
     data class TextEditor(val file: FileItem) : AppScreen()
     data class ImageViewer(val file: FileItem) : AppScreen()
+    data class ImageEditor(val file: FileItem, val back: AppScreen) : AppScreen()
     data object AppManager : AppScreen()
     data object StorageAnalyzer : AppScreen()
     data object Duplicates : AppScreen()
@@ -214,6 +216,9 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     onOpenAudio = { file, playlist ->
                         currentScreen = AppScreen.AudioPlayer(file, playlist)
                     },
+                    onEditImage = { file ->
+                        currentScreen = AppScreen.ImageEditor(file, back = AppScreen.Explorer)
+                    },
                     onOpenDuplicates = {
                         currentScreen = AppScreen.Duplicates
                     }
@@ -232,6 +237,17 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                 ImageViewerScreen(
                     fileItem = screen.file,
                     onNavigateBack = {
+                        currentScreen = AppScreen.Explorer
+                    },
+                    onEdit = { currentScreen = AppScreen.ImageEditor(screen.file, back = screen) }
+                )
+            }
+            is AppScreen.ImageEditor -> {
+                ImageEditorScreen(
+                    fileItem = screen.file,
+                    onNavigateBack = { currentScreen = screen.back },
+                    onSaved = {
+                        viewModel.loadCurrentDirectory()
                         currentScreen = AppScreen.Explorer
                     }
                 )

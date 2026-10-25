@@ -353,4 +353,21 @@
     <string name="remove_from_favorites">Убрать из избранного</string>
     <string name="added_to_favorites">Добавлено в избранное</string>
     <string name="server_removed">Сервер этой папки удалён</string>
+    <string name="undo">Отменить</string>
+    <string name="resize">Изменить размер</string>
+    <string name="discard_changes">Отменить изменения?</string>
+    <string name="discard">Не сохранять</string>
+    <string name="save_copy_or_replace">Сохранить новым файлом рядом с этим или заменить оригинал?</string>
+    <string name="save_copy_only">Эта картинка сохранится новым файлом рядом с оригиналом.</string>
+    <string name="save_copy">Сохранить копию</string>
+    <string name="replace_original">Заменить</string>
+    <string name="saved_as">Сохранено: %1$s</string>
+    <string name="edited_downscaled">Большое фото редактируется в размере %1$d пикселей по стороне, поэтому можно сохранить только копию.</string>
+    <string name="brush">Кисть</string>
+    <string name="rotate_left">Повернуть влево</string>
+    <string name="rotate_right">Повернуть вправо</string>
+    <string name="flip_horizontal">Отзеркалить</string>
+    <string name="flip_vertical">Перевернуть</string>
+    <string name="draw">Рисовать</string>
+    <string name="edit_image">Редактировать</string>
 </resources>
