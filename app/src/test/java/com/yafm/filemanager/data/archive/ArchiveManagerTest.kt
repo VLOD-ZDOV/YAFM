@@ -74,6 +74,20 @@ class ArchiveManagerTest {
     }
 
     @Test
+    fun archivesAfterAProgramAreFound() = runBlocking {
+        // A self-extracting .exe is a program with an archive after it.
+        val stub = "MZ".toByteArray() + ByteArray(5000) { (it % 251).toByte() }
+        listOf(ArchiveManager.Format.ZIP, ArchiveManager.Format.SEVEN_Z).forEach { format ->
+            val archive = File(base, "plain${format.extension}")
+            ArchiveManager.createArchive(listOf(src), archive, format)
+            val exe = File(base, "setup-${format.name}.exe").apply { writeBytes(stub + archive.readBytes()) }
+            val out = File(base, "sfx-${format.name}")
+            ArchiveManager.extractArchive(exe, out)
+            assertSameTree(src, File(out, "data"))
+        }
+    }
+
+    @Test
     fun everyFormatRoundTrips() = runBlocking {
         ArchiveManager.Format.entries.forEach { format ->
             val archive = File(base, "out${format.extension}")

@@ -117,9 +117,62 @@ object ArchiveManager {
             when {
                 read >= 6 && magic.startsWith(SEVEN_Z_MAGIC) -> extract7z(archiveFile, targetDirectory, onProgress)
                 read >= 4 && magic.startsWith(ZIP_MAGIC) -> extractZip(archiveFile, targetDirectory, onProgress)
-                else -> extractStream(archiveFile, targetDirectory, onProgress)
+                // A self-extracting .exe and the like: an archive after a program, found by looking inside.
+                else -> runCatching { extractStream(archiveFile, targetDirectory, onProgress) }.getOrElse { e ->
+                    if (!extractEmbedded(archiveFile, targetDirectory, onProgress)) throw e
+                }
             }
         }
+
+    /**
+     * A zip or 7z after other data (self-extracting archives, installers). A zip is read by its
+     * directory at the end; a 7z is found by its signature in the first [SCAN_LIMIT] bytes.
+     */
+    private fun extractEmbedded(archive: File, target: File, onProgress: (Progress) -> Unit): Boolean {
+        if (runCatching { extractZip(archive, target, onProgress) }.isSuccess) return true
+        val offset = findSignature(archive, SEVEN_Z_MAGIC) ?: return false
+        val part = File.createTempFile("embedded", ".7z")
+        try {
+            FileInputStream(archive).use { input ->
+                input.skipNBytesCompat(offset)
+                part.outputStream().use { input.copyTo(it, 64 * 1024) }
+            }
+            extract7z(part, target, onProgress)
+        } finally {
+            part.delete()
+        }
+        return true
+    }
+
+    private const val SCAN_LIMIT = 32L * 1024 * 1024
+
+    private fun findSignature(file: File, signature: ByteArray): Long? {
+        FileInputStream(file).use { input ->
+            val buf = ByteArray(1024 * 1024 + signature.size)
+            var carried = 0 // bytes kept from the previous chunk, so a signature split between chunks is found
+            var base = 0L   // file position of buf[0]
+            while (base < SCAN_LIMIT) {
+                val n = input.read(buf, carried, buf.size - carried)
+                if (n <= 0) return null
+                val len = carried + n
+                for (i in 0..len - signature.size) {
+                    if (signature.indices.all { buf[i + it] == signature[it] }) return base + i
+                }
+                carried = minOf(signature.size - 1, len)
+                System.arraycopy(buf, len - carried, buf, 0, carried)
+                base += len - carried
+            }
+        }
+        return null
+    }
+
+    private fun InputStream.skipNBytesCompat(n: Long) {
+        var left = n
+        while (left > 0) {
+            val skipped = skip(left)
+            if (skipped <= 0) { if (read() < 0) return; left-- } else left -= skipped
+        }
+    }
 
     private fun ByteArray.startsWith(prefix: ByteArray) = prefix.indices.all { this[it] == prefix[it] }
 

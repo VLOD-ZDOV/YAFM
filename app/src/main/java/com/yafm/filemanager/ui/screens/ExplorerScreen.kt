@@ -187,15 +187,17 @@ fun ExplorerScreen(
     var videoChoice by remember { mutableStateOf<FileItem?>(null) }
     var linkTarget by remember { mutableStateOf<FileItem?>(null) }
     var stripTargets by remember { mutableStateOf<List<FileItem>>(emptyList()) }
+    var openAsTarget by remember { mutableStateOf<FileItem?>(null) }
     val advanced = viewModel.settings.settings.collectAsState().value.advanced
 
     fun playBuiltIn(item: FileItem) {
         viewModel.withLocalCopy(item) { file ->
             // Next/previous: the other videos of the same local folder.
             val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
-                fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
-            } else listOf(file)
-            onOpenVideo(file, playlist)
+                fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }.filter { it.canRead() }
+            } else emptyList()
+            // A file opened "as video" is not in the folder's video list: it plays alone.
+            onOpenVideo(file, playlist.takeIf { list -> list.any { it.absolutePath == file.absolutePath } } ?: listOf(file))
         }
     }
 
@@ -205,9 +207,9 @@ fun ExplorerScreen(
             val folder = item.path.substringBeforeLast('/')
             val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
                 fileList.filter { it.category == FileCategory.AUDIO && it.path.substringBeforeLast('/') == folder }
-                    .map { java.io.File(it.path) }.filter { it.canRead() }.ifEmpty { listOf(file) }
-            } else listOf(file)
-            onOpenAudio(file, playlist)
+                    .map { java.io.File(it.path) }.filter { it.canRead() }
+            } else emptyList()
+            onOpenAudio(file, playlist.takeIf { list -> list.any { it.absolutePath == file.absolutePath } } ?: listOf(file))
         }
     }
 
@@ -240,6 +242,10 @@ fun ExplorerScreen(
             ArchiveManager.isArchive(item.name) -> extractTarget = item
             item.category == FileCategory.VIDEO -> openVideo(item)
             item.category == FileCategory.AUDIO -> playAudio(item)
+            // Unknown kinds: text opens in the editor, anything else asks how to open it.
+            item.category == FileCategory.OTHER -> viewModel.looksLikeText(item) { text ->
+                if (text) onOpenFileInEditor(item) else openAsTarget = item
+            }
             else -> handleFileClick(item, viewModel, onOpenFileInEditor, onOpenImage, context)
         }
     }
@@ -380,6 +386,35 @@ fun ExplorerScreen(
                 viewModel.changePermissions(item, octal)
                 permissionsTarget = null
             }
+        )
+    }
+
+    openAsTarget?.let { item ->
+        AlertDialog(
+            onDismissRequest = { openAsTarget = null },
+            title = { Text(str(R.string.open_as)) },
+            text = {
+                Column {
+                    Text(item.name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    listOf(
+                        R.string.as_text to { onOpenFileInEditor(item) },
+                        R.string.as_archive to { extractTarget = item },
+                        R.string.as_image to {
+                            viewModel.withLocalCopy(item) { file ->
+                                onOpenImage(item.copy(path = file.absolutePath, storageType = StorageType.LOCAL, serverId = null))
+                            }
+                        },
+                        R.string.as_video to { playBuiltIn(item) },
+                        R.string.as_music to { playAudio(item) },
+                        R.string.another_app to { viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) } }
+                    ).forEach { (label, action) ->
+                        TextButton(onClick = { openAsTarget = null; action() }, modifier = Modifier.fillMaxWidth()) {
+                            Text(str(label), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { openAsTarget = null }) { Text(str(R.string.cancel)) } }
         )
     }
 
@@ -701,7 +736,7 @@ fun ExplorerScreen(
                             if (single.category == FileCategory.IMAGE && single.storageType == StorageType.LOCAL) {
                                 add(str(R.string.edit_image) to { viewModel.clearSelection(); onEditImage(single) })
                             }
-                            if (!single.isDirectory) add(str(R.string.open_as_text) to { viewModel.clearSelection(); onOpenFileInEditor(single) })
+                            if (!single.isDirectory) add(str(R.string.open_as) to { viewModel.clearSelection(); openAsTarget = single })
                             add(str(R.string.properties) to { viewModel.clearSelection(); detailsTarget = single })
                             if (single.isDirectory) add(str(R.string.add_to_favorites) to { viewModel.clearSelection(); viewModel.addFavorite(single) })
                             if (advanced) add(str(R.string.create_link) to { viewModel.clearSelection(); linkTarget = single })

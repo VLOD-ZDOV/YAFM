@@ -59,8 +59,12 @@ data class FileItem(
                 "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp" -> FileCategory.DOCUMENT
                 "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz", "zst", "tzst", "lz4", "tlz4", "lzma", "br", "cpio" -> FileCategory.ARCHIVE
                 "apk", "xapk", "apks" -> FileCategory.APK
-                "kt", "java", "py", "c", "cpp", "h", "rs", "go", "js", "ts", "html", "css", "json", "xml", "yaml", "yml", "sh", "prop", "rc", "conf", "toml" -> FileCategory.CODE
-                "txt", "md", "log", "cfg", "ini" -> FileCategory.TEXT
+                "kt", "kts", "java", "py", "c", "cpp", "cc", "h", "hpp", "cs", "rs", "go", "js", "mjs", "tsx", "jsx", "html", "htm",
+                "css", "scss", "json", "jsonc", "xml", "yaml", "yml", "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "prop",
+                "rc", "conf", "toml", "gradle", "lua", "rb", "php", "pl", "sql", "swift", "dart", "vue", "smali", "mk", "cmake",
+                "patch", "diff", "reg", "desktop", "service", "plist", "lst" -> FileCategory.CODE
+                "txt", "md", "log", "cfg", "ini", "inf", "properties", "env", "csv", "tsv", "srt", "ass", "ssa", "vtt", "sub", "lrc",
+                "nfo", "rst", "tex", "org", "cue", "m3u", "m3u8", "pls", "gitignore", "gitattributes", "editorconfig" -> FileCategory.TEXT
                 else -> FileCategory.OTHER
             }
         }

@@ -10,6 +10,7 @@ import com.yafm.filemanager.YafmApp
 import com.yafm.filemanager.data.archive.ArchiveManager
 import com.yafm.filemanager.data.dupes.DuplicateFinder
 import com.yafm.filemanager.data.media.Metadata
+import com.yafm.filemanager.data.fs.TextSniffer
 import com.yafm.filemanager.data.fs.joinPath
 import com.yafm.filemanager.data.model.FileCategory
 import com.yafm.filemanager.data.model.FileItem
@@ -571,6 +572,15 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun changePermissions(item: FileItem, octal: String) = operation(str(R.string.permissions_changed)) {
         repository.changePermissions(item, octal)
+    }
+
+    /** Whether a file of an unknown kind holds text; files on servers are not read for this. */
+    fun looksLikeText(item: FileItem, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val text = item.storageType == StorageType.LOCAL &&
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { TextSniffer.looksLikeText(File(item.path)) }
+            onResult(text)
+        }
     }
 
     /** Local files for sharing; remote ones are fetched to the cache first. Folders are left out. */

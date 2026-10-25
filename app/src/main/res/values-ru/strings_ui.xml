@@ -386,4 +386,10 @@
     <string name="yesterday">Вчера</string>
     <string name="added">Добавлен</string>
     <string name="changed">Изменён</string>
+    <string name="open_as">Открыть как…</string>
+    <string name="as_text">Текст</string>
+    <string name="as_archive">Архив (распаковать)</string>
+    <string name="as_image">Картинку</string>
+    <string name="as_video">Видео</string>
+    <string name="as_music">Музыку</string>
 </resources>
