@@ -27,7 +27,7 @@ object Incoming {
                     ?: throw IOException(str(R.string.cannot_open_this_file))
                 return@withContext IncomingFile(file, false)
             }
-            "content" -> if (uri.authority == "${context.packageName}.fileprovider") throw IOException(str(R.string.cannot_open_this_file))
+            "content" -> if (isOwnProvider(context, uri)) throw IOException(str(R.string.cannot_open_this_file))
             else -> throw IOException(str(R.string.cannot_open_this_file))
         }
         realPath(context, uri)?.let { return@withContext IncomingFile(it, false) }
@@ -46,6 +46,16 @@ object Incoming {
             if (c.moveToFirst()) c.getString(0)?.let { File(it) }?.takeIf { it.isFile && it.canRead() && isShared(it) } else null
         }
     }.getOrNull()
+
+    /**
+     * True for any content provider of this app. The system ignores a "userId@" prefix and letter case
+     * when it finds the provider, so the check asks the system instead of comparing strings.
+     */
+    private fun isOwnProvider(context: Context, uri: Uri): Boolean {
+        val authority = uri.authority?.substringAfterLast('@') ?: return true
+        // This app always sees its own providers; others may be hidden from it (package visibility).
+        return context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName
+    }
 
     /** Inside shared storage, where every file app sees it anyway; links are resolved first. */
     private fun isShared(file: File): Boolean {
