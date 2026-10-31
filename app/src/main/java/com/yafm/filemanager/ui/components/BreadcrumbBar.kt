@@ -27,7 +27,8 @@ import com.yafm.filemanager.ui.viewmodel.PathSegment
 fun BreadcrumbBar(
     segments: List<PathSegment>,
     onSegmentClick: (PathSegment) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
 
@@ -40,49 +41,52 @@ fun BreadcrumbBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 2.dp
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            segments.forEachIndexed { index, segment ->
-                val isLast = index == segments.lastIndex
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(scrollState)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                segments.forEachIndexed { index, segment ->
+                    val isLast = index == segments.lastIndex
 
-                TextButton(
-                    onClick = { onSegmentClick(segment) },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp)
-                ) {
-                    if (index == 0) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Root",
-                            modifier = Modifier
-                                .size(16.dp)
-                                .padding(end = 4.dp),
-                            tint = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    TextButton(
+                        onClick = { onSegmentClick(segment) },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        if (index == 0) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Root",
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(end = 4.dp),
+                                tint = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = segment.name,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 13.sp,
+                                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        text = segment.name,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 13.sp,
-                            fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal
-                        ),
-                        color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
 
-                if (!isLast) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
+                    if (!isLast) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
+            trailing()
         }
     }
 }

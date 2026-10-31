@@ -36,8 +36,9 @@ import com.yafm.filemanager.data.model.FileItem
 fun PermissionsDialog(
     item: FileItem,
     onDismiss: () -> Unit,
-    onApply: (octal: String) -> Unit
+    onApply: (octal: String, recursive: Boolean) -> Unit
 ) {
+    var recursive by remember { mutableStateOf(false) }
     // Initial parsing of permissions string (e.g. "rwxr-xr-x" or "-rw-r--r--")
     val raw = item.permissions.takeLast(9).padEnd(9, '-')
 
@@ -188,10 +189,16 @@ fun PermissionsDialog(
                         label = { Text("0777") }
                     )
                 }
+                if (item.isDirectory && !item.isSymlink) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = recursive, onCheckedChange = { recursive = it })
+                        Text(str(R.string.apply_to_contents), style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onApply(octalString) }) {
+            Button(onClick = { onApply(octalString, recursive) }) {
                 Text(str(R.string.apply))
             }
         },

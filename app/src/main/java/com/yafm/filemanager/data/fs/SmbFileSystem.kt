@@ -22,6 +22,9 @@ class SmbFileSystem(private val config: ServerConfig) : FileSystem {
     private val client = SMBClient()
     private var share: DiskShare? = null
 
+    override val isRemote: Boolean get() = true
+    override val isOpen: Boolean get() = share?.isConnected == true
+
     @Synchronized
     private fun share(): DiskShare {
         share?.takeIf { it.isConnected }?.let { return it }

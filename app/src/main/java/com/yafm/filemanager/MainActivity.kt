@@ -51,7 +51,9 @@ import com.yafm.filemanager.ui.screens.SettingsScreen
 import com.yafm.filemanager.ui.screens.VideoPlayerScreen
 import com.yafm.filemanager.ui.screens.AudioPlayerScreen
 import com.yafm.filemanager.ui.components.UpdateDialog
+import com.yafm.filemanager.data.fs.ConnectionService
 import com.yafm.filemanager.ui.components.CodeDialog
+import com.yafm.filemanager.ui.components.HostKeyDialog
 import com.yafm.filemanager.ui.components.IncomingFileDialog
 import com.yafm.filemanager.ui.screens.StorageAnalyzerScreen
 import com.yafm.filemanager.ui.screens.DuplicatesScreen
@@ -91,6 +93,17 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) openPlayer.value = true
         if (intent?.action == Intent.ACTION_VIEW) intent.data?.let { incoming.value = it }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ConnectionService.stop(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val repository = (application as YafmApp).repository
+        if (!isChangingConfigurations && (repository.hasOpenConnections || repository.isBusy)) ConnectionService.start(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -205,6 +218,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
     LaunchedEffect(Unit) { viewModel.checkForUpdates(manual = false) }
     UpdateDialog(viewModel)
     CodeDialog(viewModel)
+    HostKeyDialog(viewModel)
 
     // Music playing in the background gets a bar under the browsing screens.
     val showMini = currentScreen is AppScreen.Home || currentScreen is AppScreen.Explorer

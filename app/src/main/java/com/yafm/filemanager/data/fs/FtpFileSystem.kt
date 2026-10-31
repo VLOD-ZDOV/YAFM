@@ -23,6 +23,9 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
 
     private var control: FTPClient? = null
 
+    override val isRemote: Boolean get() = true
+    override val isOpen: Boolean get() = control?.isConnected == true
+
     private fun connect(): FTPClient {
         val ftp = FTPClient()
         ftp.connectTimeout = 10_000

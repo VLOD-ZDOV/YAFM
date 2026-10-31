@@ -4,6 +4,7 @@ import com.yafm.filemanager.str
 import com.yafm.filemanager.R
 import android.content.ComponentName
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -27,9 +28,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -38,6 +44,9 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -46,11 +55,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,24 +75,34 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.annotation.OptIn as AndroidOptIn
+import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yafm.filemanager.data.audio.PlaybackService
+import com.yafm.filemanager.data.model.FileItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
+private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+
 /** Plays [file] in the background service, with the other tracks of its folder as the queue. */
 @OptIn(ExperimentalMaterial3Api::class)
+@AndroidOptIn(UnstableApi::class)
 @Composable
 fun AudioPlayerScreen(
     file: File?,
@@ -97,6 +118,9 @@ fun AudioPlayerScreen(
     var index by remember { mutableIntStateOf(0) }
     var shuffle by remember { mutableStateOf(false) }
     var repeat by remember { mutableIntStateOf(Player.REPEAT_MODE_ALL) }
+    var speed by remember { mutableFloatStateOf(1f) }
+    var showSpeeds by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
     var queue by remember(playlist, file) { mutableStateOf(if (file == null) emptyList() else playlist.ifEmpty { listOf(file) }) }
 
     BackHandler(onBack = onNavigateBack)
@@ -112,6 +136,7 @@ fun AudioPlayerScreen(
             index = player.currentMediaItemIndex
             shuffle = player.shuffleModeEnabled
             repeat = player.repeatMode
+            speed = player.playbackParameters.speed
         }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) = sync(player)
@@ -284,6 +309,16 @@ fun AudioPlayerScreen(
         }
     }
 
+    val track = controller?.currentMediaItem?.mediaId ?: queue.getOrNull(index)?.absolutePath
+    if (showInfo && track != null) {
+        val tracks = controller?.currentTracks?.groups.orEmpty()
+        TrackInfoDialog(
+            path = track,
+            format = tracks.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0),
+            onDismiss = { showInfo = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -291,6 +326,30 @@ fun AudioPlayerScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = str(R.string.back))
+                    }
+                },
+                actions = {
+                    Box {
+                        val speedHint = str(R.string.playback_speed)
+                        TextButton(
+                            onClick = { showSpeeds = true },
+                            modifier = Modifier.semantics { contentDescription = speedHint }
+                        ) { Text(speedLabel(speed)) }
+                        DropdownMenu(expanded = showSpeeds, onDismissRequest = { showSpeeds = false }) {
+                            SPEEDS.forEach { s ->
+                                DropdownMenuItem(
+                                    text = { Text(speedLabel(s)) },
+                                    trailingIcon = { if (s == speed) Icon(Icons.Default.Check, contentDescription = null) },
+                                    onClick = {
+                                        controller?.setPlaybackSpeed(s)
+                                        showSpeeds = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    IconButton(onClick = { showInfo = true }) {
+                        Icon(Icons.Default.Info, contentDescription = str(R.string.track_info))
                     }
                 }
             )
@@ -338,6 +397,63 @@ private fun decodeArt(data: ByteArray, max: Int = 1024): ImageBitmap? {
     while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= max) sample *= 2
     val options = BitmapFactory.Options().apply { inSampleSize = sample }
     return BitmapFactory.decodeByteArray(data, 0, data.size, options)?.asImageBitmap()
+}
+
+private fun speedLabel(speed: Float) =
+    String.format(Locale.US, "%.2f", speed).trimEnd('0').trimEnd('.') + "×"
+
+@Composable
+private fun TrackInfoDialog(path: String, format: Format?, onDismiss: () -> Unit) {
+    val rows by produceState<List<Pair<Int, String>>>(emptyList(), path, format) {
+        value = withContext(Dispatchers.IO) { trackInfo(path, format) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(File(path).name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            SelectionContainer {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    rows.forEach { (label, value) ->
+                        Text(str(label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(value, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(str(R.string.close)) } }
+    )
+}
+
+/** Tags from the file; rate and channels from the player, which knows them on every Android version. */
+private fun trackInfo(path: String, format: Format?): List<Pair<Int, String>> {
+    val file = File(path)
+    val retriever = MediaMetadataRetriever()
+    try {
+        runCatching { retriever.setDataSource(path) }
+        fun tag(key: Int) = runCatching { retriever.extractMetadata(key) }.getOrNull()?.takeIf { it.isNotBlank() }
+        val kbps = tag(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.let { it / 1000 }
+        val ms = tag(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+        val mime = format?.sampleMimeType ?: tag(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+        return listOfNotNull(
+            tag(MediaMetadataRetriever.METADATA_KEY_TITLE)?.let { R.string.title to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.let { R.string.artist to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.let { R.string.album to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)?.let { R.string.album_artist to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_YEAR)?.let { R.string.year to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_GENRE)?.let { R.string.genre to it },
+            tag(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)?.let { R.string.track_number to it },
+            ms?.let { R.string.duration to formatClock(it) },
+            mime?.let { R.string.format to it },
+            kbps?.let { R.string.bitrate to str(R.string.bitrate_value, it) },
+            format?.sampleRate?.takeIf { it != Format.NO_VALUE }?.let { R.string.sample_rate to str(R.string.sample_rate_value, it) },
+            format?.channelCount?.takeIf { it != Format.NO_VALUE }?.let { R.string.channels to it.toString() },
+            R.string.size to FileItem(name = file.name, path = path, size = file.length()).formattedSize(),
+            R.string.file_location to path
+        )
+    } finally {
+        retriever.release()
+    }
 }
 
 private fun formatClock(ms: Long): String {

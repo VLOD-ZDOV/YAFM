@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,6 +61,8 @@ fun FileDetailsDialog(
     var hashError by remember { mutableStateOf<String?>(null) }
     var hashProgress by remember { mutableFloatStateOf(0f) }
     var isCalculatingHash by remember { mutableStateOf(false) }
+    var folderSize by remember { mutableStateOf<String?>(null) }
+    var isSizing by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -88,6 +91,24 @@ fun FileDetailsDialog(
                 DetailRow(label = str(R.string.permissions_2), value = item.permissions)
                 DetailRow(label = str(R.string.owner_group), value = "${item.owner} : ${item.group}")
                 DetailRow(label = str(R.string.storage), value = item.storageType.name)
+                if (item.isSymlink) {
+                    val target by produceState<String?>(null, item) { value = repository.linkTarget(item) }
+                    target?.let { DetailRow(label = str(R.string.link_target), value = it) }
+                }
+                if (item.isDirectory) {
+                    when {
+                        folderSize != null -> DetailRow(label = str(R.string.folder_size), value = folderSize!!)
+                        isSizing -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        else -> OutlinedButton(onClick = {
+                            isSizing = true
+                            scope.launch {
+                                folderSize = runCatching { repository.folderSize(item) }
+                                    .fold({ FileItem(name = item.name, path = item.path, size = it).formattedSize() }, { str(R.string.error, it.message) })
+                                isSizing = false
+                            }
+                        }) { Text("${str(R.string.folder_size)}: ${str(R.string.calculate)}") }
+                    }
+                }
 
                 if (!item.isDirectory) {
                     Spacer(modifier = Modifier.height(12.dp))

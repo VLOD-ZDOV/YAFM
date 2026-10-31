@@ -21,8 +21,11 @@ import com.yafm.filemanager.data.model.RootInfo
 import com.yafm.filemanager.data.model.ServerConfig
 import com.yafm.filemanager.data.model.StorageStats
 import com.yafm.filemanager.data.model.StorageType
-import com.yafm.filemanager.data.qsh.Qsh
 import com.yafm.filemanager.data.root.RootCommander
+import com.yafm.filemanager.data.repository.describeError
+import com.yafm.filemanager.data.transfer.OnConflict
+import com.yafm.filemanager.data.transfer.TransferRequest
+import com.yafm.filemanager.data.transfer.TransferState
 import com.yafm.filemanager.data.update.Release
 import com.yafm.filemanager.data.update.Updater
 import kotlinx.coroutines.Job
@@ -148,34 +151,6 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _clipboardOp = MutableStateFlow(ClipboardOp.NONE)
     val clipboardOp: StateFlow<ClipboardOp> = _clipboardOp.asStateFlow()
 
-    /** A qsh server asks for a one-time code; [retry] runs again once it is given. */
-    data class CodeRequest(val server: ServerConfig, val prompt: String, val retry: () -> Unit)
-
-    private val _codeRequest = MutableStateFlow<CodeRequest?>(null)
-    val codeRequest: StateFlow<CodeRequest?> = _codeRequest.asStateFlow()
-
-    fun submitCode(code: String) {
-        val request = _codeRequest.value ?: return
-        _codeRequest.value = null
-        repository.provideQshCode(request.server, code)
-        request.retry()
-    }
-
-    fun cancelCode() {
-        _codeRequest.value = null
-    }
-
-    /**
-     * True when [e] was a code request, which is then shown instead of an error. The code goes to the
-     * server that asked, which need not be the one open (a paste from another server).
-     */
-    private fun askForCode(e: Throwable, retry: () -> Unit): Boolean {
-        if (e !is Qsh.CodeRequired) return false
-        val server = serverRepo.getServer(e.serverId) ?: return false
-        _codeRequest.value = CodeRequest(server, e.prompt, retry)
-        return true
-    }
-
     private val history = ArrayDeque<Location>()
     private val scrollPositions = mutableMapOf<Location, Pair<Int, Int>>()
 
@@ -189,6 +164,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     init {
         refreshDashboard()
         loadCurrentDirectory()
+        viewModelScope.launch { repository.transfers.messages.collect { _messages.tryEmit(it) } }
+        viewModelScope.launch { repository.transfers.changed.collect { if (it == _location.value) loadCurrentDirectory() } }
     }
 
     fun refreshDashboard() {
@@ -209,9 +186,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             try {
                 rawFiles.value = repository.list(_location.value)
             } catch (e: Exception) {
-                if (!askForCode(e) { loadCurrentDirectory() }) {
-                    _errorMessage.value = describe(e)
-                }
+                _errorMessage.value = describe(e)
                 rawFiles.value = emptyList()
             } finally {
                 _isLoading.value = false
@@ -230,6 +205,28 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     /** Another directory in the current storage. */
     fun navigateTo(path: String) = go(_location.value.copy(path = path))
+
+    /** The folder of the swap button, in any storage. */
+    private val _markedFolder = MutableStateFlow<Location?>(null)
+    val markedFolder: StateFlow<Location?> = _markedFolder.asStateFlow()
+
+    fun markFolder() {
+        val here = _location.value
+        _markedFolder.value = here
+        _messages.tryEmit(str(R.string.folder_marked, here.category?.let { categoryTitle(it) } ?: here.path.trimEnd('/').substringAfterLast('/').ifEmpty { "/" }))
+    }
+
+    /** `cd -`: goes to the marked folder and marks the one left, so the next tap comes back. */
+    fun swapWithMarkedFolder() {
+        val target = _markedFolder.value ?: return markFolder()
+        val here = _location.value
+        if (target == here) {
+            _messages.tryEmit(str(R.string.already_in_marked_folder))
+            return
+        }
+        _markedFolder.value = here
+        go(target)
+    }
 
     private fun show(target: Location) {
         _location.value = target
@@ -261,9 +258,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 enter(Location(server.type, repository.startPath(server), server))
             } catch (e: Exception) {
                 _isLoading.value = false
-                if (!askForCode(e) { navigateToServer(server) }) {
-                    _messages.tryEmit("${server.name}: ${describe(e)}")
-                }
+                _messages.tryEmit("${server.name}: ${describe(e)}")
             }
         }
     }
@@ -497,18 +492,41 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         _clipboardOp.value = ClipboardOp.NONE
     }
 
+    /** Names taken in the target of a paste; the user decides what happens to them. */
+    data class PasteConflict(val request: TransferRequest, val names: List<String>)
+
+    private val _pasteConflict = MutableStateFlow<PasteConflict?>(null)
+    val pasteConflict: StateFlow<PasteConflict?> = _pasteConflict.asStateFlow()
+
+    val transfers: StateFlow<TransferState> = repository.transfers.state
+
     fun pasteClipboard() {
-        val items = _clipboardItems.value
-        val move = _clipboardOp.value == ClipboardOp.CUT
-        operation {
-            val skipped = repository.transfer(items, _location.value, move) { _progress.value = it }
-            clearClipboard()
-            _messages.tryEmit(
-                (if (move) str(R.string.moved, items.size) else str(R.string.copied, items.size)) +
-                    if (skipped > 0) str(R.string.links_to_folders_are_not_copied_skipped, skipped) else ""
-            )
+        val request = TransferRequest(_clipboardItems.value, _location.value, _clipboardOp.value == ClipboardOp.CUT, OnConflict.KEEP_BOTH)
+        viewModelScope.launch {
+            try {
+                val taken = repository.conflicts(request.items, request.dest, request.move)
+                if (taken.isEmpty()) startTransfer(request) else _pasteConflict.value = PasteConflict(request, taken.map { it.name })
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            }
         }
     }
+
+    /** Null: the paste is called off. */
+    fun resolvePasteConflict(choice: OnConflict?) {
+        val conflict = _pasteConflict.value ?: return
+        _pasteConflict.value = null
+        if (choice != null) startTransfer(conflict.request.copy(onConflict = choice))
+    }
+
+    private fun startTransfer(request: TransferRequest) {
+        clearClipboard()
+        repository.transfers.enqueue(request)
+    }
+
+    fun cancelTransfer() = repository.transfers.cancel()
+    fun retryTransfer() = repository.transfers.retry()
+    fun dismissFailedTransfer() = repository.transfers.dismissFailed()
 
     // File operations
 
@@ -523,9 +541,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 block()
                 success?.let { _messages.tryEmit(it) }
             } catch (e: Exception) {
-                if (!askForCode(e) { operation(success, block) }) {
-                    _messages.tryEmit(describe(e))
-                }
+                _messages.tryEmit(describe(e))
             } finally {
                 _progress.value = null
                 loadCurrentDirectory()
@@ -573,8 +589,44 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         repository.createLink(target, _location.value, name)
     }
 
-    fun changePermissions(item: FileItem, octal: String) = operation(str(R.string.permissions_changed)) {
-        repository.changePermissions(item, octal)
+    fun changePermissions(item: FileItem, octal: String, recursive: Boolean = false) = operation(str(R.string.permissions_changed)) {
+        repository.changePermissions(item, octal, recursive)
+    }
+
+    /** Opens a path typed by the user; `~` is the server's home. */
+    fun goToPath(typed: String) {
+        val loc = _location.value
+        viewModelScope.launch {
+            try {
+                val path = typed.trim().trimEnd('/').ifEmpty { "/" }
+                val start = if (path.startsWith("~") && loc.server != null) repository.startPath(loc.server.copy(remotePath = "")) else ""
+                navigateTo(if (start.isEmpty()) path else start + path.removePrefix("~"))
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            }
+        }
+    }
+
+    val canRunOnServer: Boolean get() = repository.canRunOnServer(_location.value)
+
+    /** The server's own programs make the archive, beside the selected files. */
+    fun compressOnServer(name: String, format: ArchiveManager.Format, onDone: () -> Unit) {
+        val items = _selectedItems.value.toList()
+        val location = _location.value
+        clearSelection()
+        onDone()
+        operation {
+            _progress.value = str(R.string.working_on_server)
+            _messages.tryEmit(str(R.string.saved_as, repository.compressOnServer(items, location, name, format)))
+        }
+    }
+
+    fun extractOnServer(item: FileItem, onDone: () -> Unit) {
+        onDone()
+        operation {
+            _progress.value = str(R.string.working_on_server)
+            _messages.tryEmit(str(R.string.extracted_to, repository.extractOnServer(item)))
+        }
     }
 
     /** Whether a file of an unknown kind holds text; files on servers are not read for this. */
@@ -792,15 +844,11 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
-        /**
-         * Files of a category grouped by folder (shown relative to [root]), folders in name order,
-         * each keeping the files' order.
-         */
         /** How a category screen is split: recent files by day, the other categories by folder. */
-        fun sections(items: List<FileItem>, location: Location): List<Pair<String?, List<FileItem>>> = when (location.category) {
+        fun sections(items: List<FileItem>, location: Location, sort: SortMode = SortMode.NAME_ASC): List<Pair<String?, List<FileItem>>> = when (location.category) {
             null -> listOf(null to items)
             FileCategory.RECENT -> groupByDay(items)
-            else -> groupByFolder(items, location.path)
+            else -> groupByFolder(items, location.path, sort)
         }
 
         /** Newest first, under "Today", "Yesterday" or the date. */
@@ -832,13 +880,19 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             return "${str(if (item.isNew) R.string.added else R.string.changed)} $time · $folder"
         }
 
-        fun groupByFolder(items: List<FileItem>, root: String): List<Pair<String?, List<FileItem>>> =
-            items.groupBy { it.path.substringBeforeLast('/', "") }
-                .toSortedMap(String.CASE_INSENSITIVE_ORDER)
-                .map { (dir, group) ->
-                    val shown = dir.removePrefix(root).trimStart('/').ifEmpty { "/" }
-                    shown to group
-                }
+        /**
+         * Files of a category grouped by folder (shown relative to [root]), each keeping the files' order.
+         * Folders go in name order; when [items] are sorted by date or size, the folder of the first file
+         * leads, so the newest video brings its folder to the top.
+         */
+        fun groupByFolder(items: List<FileItem>, root: String, sort: SortMode = SortMode.NAME_ASC): List<Pair<String?, List<FileItem>>> {
+            val groups: Map<String, List<FileItem>> = items.groupBy { it.path.substringBeforeLast('/', "") }
+            val byName = sort == SortMode.NAME_ASC || sort == SortMode.NAME_DESC
+            return (if (byName) groups.toSortedMap(String.CASE_INSENSITIVE_ORDER) else groups).map { (dir, group) ->
+                val shown = dir.removePrefix(root).trimStart('/').ifEmpty { "/" }
+                shown to group
+            }
+        }
 
         fun batchName(item: FileItem, index: Int, prefix: String, suffix: String, find: String, replace: String, addIndex: Boolean): String {
             val hasExt = !item.isDirectory && item.extension.isNotEmpty()
@@ -849,16 +903,6 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             return if (hasExt) "$result.${item.name.substringAfterLast('.')}" else result
         }
 
-        fun describe(e: Throwable): String {
-            val name = e.javaClass.simpleName
-            return when {
-                name == "JSchChangedHostKeyException" ->
-                    str(R.string.the_server_s_key_has_changed_the_server)
-                e is java.net.UnknownHostException -> str(R.string.server_not_found, e.message)
-                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> str(R.string.the_server_does_not_answer)
-                name == "JSchException" && e.message?.contains("Auth fail") == true -> str(R.string.wrong_user_name_or_password)
-                else -> e.message?.takeIf { it.isNotBlank() } ?: name
-            }
-        }
+        fun describe(e: Throwable): String = describeError(e)
     }
 }

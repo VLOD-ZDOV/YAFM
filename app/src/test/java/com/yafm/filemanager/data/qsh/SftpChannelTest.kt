@@ -105,4 +105,21 @@ class SftpChannelTest {
         }
         assertEquals("/", sftp.realpath("/"))
     }
+
+    @Test
+    fun resumesRenamesOverAndKeepsTimes() {
+        val bytes = Random.nextBytes(500_000)
+        val path = "$dir/resume.bin"
+        sftp.openOutputStream(path).use { it.write(bytes, 0, 123_456) }
+        sftp.openAppendStream(path).use { it.write(bytes, 123_456, bytes.size - 123_456) }
+        assertArrayEquals(bytes.copyOfRange(400_000, 500_000), sftp.openInputStream(path, 400_000).use { it.readBytes() })
+
+        sftp.openOutputStream("$dir/old").use { it.write(1) }
+        sftp.renameOver(path, "$dir/old")
+        assertEquals(bytes.size.toLong(), sftp.stat("$dir/old").size)
+
+        sftp.setMtime("$dir/old", 1_600_000_000)
+        assertEquals(1_600_000_000L, sftp.lstat("$dir/old").mtime)
+        assertTrue(sftp.isAlive)
+    }
 }

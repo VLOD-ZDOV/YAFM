@@ -3,7 +3,9 @@ package com.yafm.filemanager.data.qsh
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
 import android.content.Context
+import com.yafm.filemanager.data.fs.ExecResult
 import com.yafm.filemanager.data.model.ServerConfig
+import com.yafm.filemanager.data.repository.FileRepository
 import android.system.Os
 import java.io.File
 import java.io.IOException
@@ -25,20 +27,25 @@ class Qsh(context: Context) {
     private val controlDir = File(home, "c")
 
     init {
-        // The sftp session is the master connection (ControlMaster=auto); `qsh cp` finds its socket through
-        // this config and reuses the login, so a one-time code is asked once per session, not per copy.
+        // The sftp session starts a background master (ControlMaster=auto); commands and later sessions find
+        // its socket through this config and reuse the login, so a one-time code is asked once. The master
+        // stays for ControlPersist after the last session, and a new one is what needs the code.
         configDir.mkdirs()
         controlDir.mkdirs()
         listOf(home, File(home, ".config"), configDir, controlDir).forEach { runCatching { Os.chmod(it.path, "700".toInt(8)) } }
         val config = File(configDir, "config")
-        val text = "Host *\n  ControlPath ${controlDir.absolutePath}/%C\n"
+        val text = "Host *\n  ControlPath ${controlDir.absolutePath}/%C\n  ControlPersist ${FileRepository.KEEP_MINUTES}m\n"
         if (!config.exists() || config.readText() != text) config.writeText(text)
         // qsh refuses config files others could write.
         runCatching { Os.chmod(config.path, "600".toInt(8)) }
     }
 
-    /** Whether some sftp session is a master that `qsh cp` can ride on (a socket besides the locks). */
-    fun hasSharedConnection(): Boolean = controlDir.listFiles()?.any { !it.name.endsWith(".lock") } == true
+    /** Ends the server's master: the next login asks for a code again. */
+    fun closeSharedConnection(c: ServerConfig) {
+        runCatching { control(c, "exit") }
+    }
+
+    private fun control(c: ServerConfig, command: String) = run(listOf("-O", command, "-p", c.port.toString(), destination(c)))
 
     /** `-i key` for a server with an imported key; this phone's own key is qsh's default. */
     private fun identity(c: ServerConfig): List<String> =
@@ -94,15 +101,15 @@ class Qsh(context: Context) {
     )
 
     /** The server wants an answer (a one-time code) that BatchMode does not let qsh ask for. */
-    class CodeRequired(val serverId: String, val prompt: String) : IOException(str(R.string.the_server_asks_for_a_code, prompt)) {
+    class CodeRequired(val server: ServerConfig, val prompt: String) : IOException(str(R.string.the_server_asks_for_a_code, prompt)) {
         companion object {
             const val MARKER = "prompting is disabled"
 
-            /** [serverId]: the server that asked, so the code can only go back to it. */
-            fun from(serverId: String, stderr: String): CodeRequired? {
+            /** [server]: the one that asked, so the code can only go back to it. */
+            fun from(server: ServerConfig, stderr: String): CodeRequired? {
                 if (MARKER !in stderr) return null
-                val prompt = Regex("asks \"([^\"]*)\"").find(stderr)?.groupValues?.get(1)?.trim()
-                return CodeRequired(serverId, prompt?.ifEmpty { null } ?: str(R.string.one_time_code))
+                val prompt = Regex("asks \"([^\"]*)\"").find(stderr)?.groupValues?.get(1)?.removePrefix("(server)")?.trim()
+                return CodeRequired(server, prompt?.ifEmpty { null } ?: str(R.string.one_time_code))
             }
         }
     }
@@ -110,17 +117,23 @@ class Qsh(context: Context) {
     /** `qsh pair`: registers this app's key on the server with a code from `qshd pair` and pins the host key. */
     fun pair(c: ServerConfig, code: String): String = run(listOf("pair", "-p", c.port.toString()) + identity(c) + listOf(destination(c), code.trim()))
 
-    fun upload(c: ServerConfig, localPath: String, remoteDir: String, recursive: Boolean) =
-        copy(c, listOf(localPath, "${destination(c)}:${remoteDir.trimEnd('/')}/"), recursive)
-
-    fun download(c: ServerConfig, remotePath: String, localDir: String, recursive: Boolean) =
-        copy(c, listOf("${destination(c)}:$remotePath", localDir.trimEnd('/') + "/"), recursive)
-
-    private fun copy(c: ServerConfig, paths: List<String>, recursive: Boolean) {
-        val args = mutableListOf("cp", "-p", c.port.toString(), "--accept-new-host")
-        args += identity(c)
-        if (recursive) args += "-r"
-        run(args + "--" + paths, timeoutMinutes = 24 * 60)
+    /** Runs [command] through the running master, without a new login. */
+    fun exec(c: ServerConfig, command: String, timeoutMinutes: Long): ExecResult {
+        val process = start(listOf("-q", "-T", "-p", c.port.toString()) + identity(c) + listOf("-o", "BatchMode=yes", destination(c), command))
+        process.outputStream.close()
+        val stderr = StringBuilder()
+        val stdout = StringBuilder()
+        val readers = listOf(
+            Thread { stderr.append(process.errorStream.bufferedReader().readText()) },
+            Thread { stdout.append(process.inputStream.bufferedReader().readText()) }
+        ).onEach { it.start() }
+        try {
+            if (!process.waitFor(timeoutMinutes, TimeUnit.MINUTES)) throw IOException(str(R.string.qsh_timed_out))
+        } finally {
+            if (process.isAlive) process.destroyForcibly()
+        }
+        readers.forEach { it.join(1000) }
+        return ExecResult(process.exitValue(), stdout.toString(), stderr.toString())
     }
 
     private fun run(args: List<String>, timeoutMinutes: Long = 2): String {

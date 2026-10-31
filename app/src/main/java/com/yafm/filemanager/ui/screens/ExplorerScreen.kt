@@ -64,6 +64,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.horizontalScroll
@@ -105,7 +110,11 @@ import com.yafm.filemanager.ui.components.FileDetailsDialog
 import com.yafm.filemanager.ui.components.FileGridItem
 import com.yafm.filemanager.ui.components.FileListItem
 import com.yafm.filemanager.ui.components.NewItemDialog
+import com.yafm.filemanager.ui.components.GoToPathDialog
+import com.yafm.filemanager.ui.components.PasteConflictDialog
 import com.yafm.filemanager.ui.components.PasteFloatingBar
+import com.yafm.filemanager.ui.components.ServerInfoDialog
+import com.yafm.filemanager.ui.components.TransferCard
 import com.yafm.filemanager.ui.components.PermissionsDialog
 import com.yafm.filemanager.ui.components.RenameDialog
 import com.yafm.filemanager.ui.theme.RootColor
@@ -165,6 +174,11 @@ fun ExplorerScreen(
     val availableTypes by viewModel.availableTypes.collectAsState()
     val collapsedFolders by viewModel.collapsedFolders.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
+    val markedFolder by viewModel.markedFolder.collectAsState()
+    val pasteConflict by viewModel.pasteConflict.collectAsState()
+    val transfers by viewModel.transfers.collectAsState()
+    var showGoToPath by remember { mutableStateOf(false) }
+    var showServerInfo by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -286,6 +300,22 @@ fun ExplorerScreen(
         )
     }
 
+    pasteConflict?.let { conflict ->
+        PasteConflictDialog(conflict, viewModel::resolvePasteConflict)
+    }
+
+    if (showGoToPath) {
+        GoToPathDialog(currentPath, onDismiss = { showGoToPath = false }) {
+            showGoToPath = false
+            viewModel.goToPath(it)
+        }
+    }
+
+    val infoServer = location.server
+    if (showServerInfo && infoServer != null) {
+        ServerInfoDialog(infoServer, currentPath, viewModel.repository) { showServerInfo = false }
+    }
+
     if (showNewFileDialog) {
         NewItemDialog(
             isFolder = false,
@@ -309,7 +339,8 @@ fun ExplorerScreen(
                     extractTarget = null
                     Toast.makeText(context, str(R.string.extracted_to, dest), Toast.LENGTH_SHORT).show()
                 }
-            }
+            },
+            onExtractOnServer = if (viewModel.canRunOnServer) ({ viewModel.extractOnServer(item) { extractTarget = null } }) else null
         )
     }
 
@@ -323,7 +354,10 @@ fun ExplorerScreen(
                 viewModel.compressSelected(archiveName, format) {
                     showCompressDialog = false
                 }
-            }
+            },
+            onCompressOnServer = if (viewModel.canRunOnServer) ({ archiveName, format ->
+                viewModel.compressOnServer(archiveName, format) { showCompressDialog = false }
+            }) else null
         )
     }
 
@@ -383,8 +417,8 @@ fun ExplorerScreen(
         PermissionsDialog(
             item = item,
             onDismiss = { permissionsTarget = null },
-            onApply = { octal ->
-                viewModel.changePermissions(item, octal)
+            onApply = { octal, recursive ->
+                viewModel.changePermissions(item, octal, recursive)
                 permissionsTarget = null
             }
         )
@@ -580,6 +614,24 @@ fun ExplorerScreen(
                                 )
                             }
                             if (location.category == null) {
+                                DropdownMenuItem(
+                                    text = { Text(str(R.string.go_to_path)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showGoToPath = true
+                                    }
+                                )
+                            }
+                            if (viewModel.canRunOnServer) {
+                                DropdownMenuItem(
+                                    text = { Text(str(R.string.server_info)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showServerInfo = true
+                                    }
+                                )
+                            }
+                            if (location.category == null) {
                                 val favorite = viewModel.isFavorite(location)
                                 DropdownMenuItem(
                                     text = { Text(if (favorite) str(R.string.remove_from_favorites) else str(R.string.add_to_favorites)) },
@@ -590,7 +642,7 @@ fun ExplorerScreen(
                                 )
                             }
                             if (location.category != null) {
-                                val folders = FileExplorerViewModel.sections(fileList, location).mapNotNull { it.first }
+                                val folders = FileExplorerViewModel.sections(fileList, location, sortMode).mapNotNull { it.first }
                                 val allCollapsed = folders.isNotEmpty() && collapsedFolders.containsAll(folders)
                                 DropdownMenuItem(
                                     text = { Text(if (allCollapsed) str(R.string.expand_all) else str(R.string.collapse_all)) },
@@ -755,6 +807,8 @@ fun ExplorerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            TransferCard(transfers, viewModel::cancelTransfer, viewModel::retryTransfer, viewModel::dismissFailedTransfer)
+
             progress?.let { text ->
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
@@ -771,6 +825,13 @@ fun ExplorerScreen(
                 segments = viewModel.getBreadcrumbs(),
                 onSegmentClick = { segment ->
                     if (location.category == null) viewModel.navigateTo(segment.fullPath)
+                },
+                trailing = {
+                    MarkedFolderButton(
+                        marked = markedFolder != null,
+                        onClick = { viewModel.swapWithMarkedFolder() },
+                        onLongClick = { viewModel.markFolder() }
+                    )
                 }
             )
 
@@ -845,7 +906,7 @@ fun ExplorerScreen(
                 } else {
                     fun onItemClick(item: FileItem) = if (isSelectionMode) viewModel.toggleSelection(item) else openItem(item)
                     // A category gathers files from many folders: they come grouped, each under its folder.
-                    val sections = remember(fileList, location) { FileExplorerViewModel.sections(fileList, location) }
+                    val sections = remember(fileList, location, sortMode) { FileExplorerViewModel.sections(fileList, location, sortMode) }
                     if (isGridView) {
                         LazyVerticalGrid(
                             state = gridState,
@@ -1040,5 +1101,24 @@ private fun FolderHeader(
                 tint = if (allSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/** Like `cd -`: a tap jumps between this folder and the marked one, a long press marks this one. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MarkedFolderButton(marked: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    ) {
+        Icon(
+            Icons.Default.SwapHoriz,
+            contentDescription = str(R.string.jump_to_marked_folder),
+            tint = if (marked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

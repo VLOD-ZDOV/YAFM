@@ -21,4 +21,13 @@ class GroupByFolderTest {
         assertEquals(listOf("/", "DCIM/Camera", "download", "Pictures"), groups.map { it.first })
         assertEquals(listOf("b.jpg", "a.jpg"), groups[1].second.map { it.name })
     }
+
+    @Test
+    fun sortedByDateTheNewestFileBringsItsFolderUp() {
+        val root = "/storage/emulated/0"
+        val newestFirst = listOf(f("$root/Download/october.mp4"), f("$root/DCIM/Camera/september.mp4"), f("$root/Download/june.mp4"))
+        val groups = FileExplorerViewModel.groupByFolder(newestFirst, root, SortMode.DATE_DESC)
+        assertEquals(listOf("Download", "DCIM/Camera"), groups.map { it.first })
+        assertEquals(listOf("october.mp4", "june.mp4"), groups[0].second.map { it.name })
+    }
 }

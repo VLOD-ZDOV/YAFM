@@ -8,7 +8,7 @@ An Android file manager for phone storage, root and network servers, with a vide
 
 ### Files
 - Phone storage, and the whole file system with root (KernelSU, Magisk, APatch).
-- Copy and move between any storages: phone, root, SFTP, qsh, SMB, FTP. Names already taken get a “ (1)” suffix, nothing is overwritten.
+- Copy and move between any storages: phone, root, SFTP, qsh, SMB, FTP. A name already taken asks what to do: replace, keep both, skip, or only new and changed files.
 - Categories on the home screen list every image, video, song, document or archive in internal storage, grouped by folder. A folder's files are selected with one tap, and a category can be narrowed to some file types (say, pdf and docx).
 - Recent: files added or changed in the last 30 days, by day, each marked as added or changed.
 - Favorite folders on the home screen, from any storage. Sort order, file types and list or grid view are kept per folder; category folders can be collapsed.
@@ -31,8 +31,10 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue that goes round (also from the Music category); the notification opens the player.
 
 ### Network storage
-- **SFTP** (SSH): one connection per server; the server key is remembered on first connect and a changed key is refused.
-- **qsh** (SSH over QUIC with TCP fallback): browse over the server's sftp subsystem, copy with `qsh cp`. Sign in with this phone's key by pairing with a code from `qshd pair`, or add the key shown in the settings to the server. One-time codes (2FA) are asked for when the server wants one.
+- **SFTP** (SSH): one connection per server; a new server key is shown with its fingerprint to accept, a changed one comes with a warning. Password, key and one-time codes (keyboard-interactive).
+- **Transfers** run in the background, one after another, with speed, time left and cancel. A lost connection reconnects and goes on from where it stopped, and a failed transfer can be retried.
+- **On SFTP and qsh servers**: copies stay on the server (`cp`), archives can be made and unpacked there with its own programs, plus folder size, disk space, permissions for a whole folder and going to a typed path.
+- **qsh** (SSH over QUIC with TCP fallback): browse and copy over the server's sftp subsystem. Sign in with this phone's key by pairing with a code from `qshd pair`, or add the key shown in the settings to the server. One-time codes (2FA) are asked for when the server wants one, in any operation, and the login lasts 30 minutes after you leave the app.
 - **SMB** 2/3 (Windows shares, NAS) and **FTP** (unencrypted, for trusted networks).
 - Saved passwords are encrypted with a key from the Android Keystore.
 

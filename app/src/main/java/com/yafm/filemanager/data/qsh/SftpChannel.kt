@@ -40,6 +40,9 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
     private val pending = ConcurrentHashMap<Int, CompletableFuture<Packet>>()
     private val nextId = AtomicInteger(1)
     @Volatile private var failure: IOException? = null
+    private val extensions = HashSet<String>()
+
+    val isAlive: Boolean get() = failure == null
 
     init {
         synchronized(out) {
@@ -49,9 +52,15 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
             out.flush()
         }
         val len = inp.readInt()
-        val type = inp.readUnsignedByte()
-        inp.skipBytes(len - 1)
-        if (type != FXP_VERSION) throw IOException(str(R.string.the_server_does_not_speak_sftp))
+        if (len < 5 || len > MAX_PACKET) throw IOException(str(R.string.the_server_does_not_speak_sftp))
+        val hello = ByteArray(len).also { inp.readFully(it) }
+        val reply = ByteBuffer.wrap(hello)
+        if (reply.get().toInt() != FXP_VERSION) throw IOException(str(R.string.the_server_does_not_speak_sftp))
+        reply.getInt()
+        while (reply.hasRemaining()) {
+            extensions += reply.string()
+            reply.string()
+        }
         Thread(::readLoop, "sftp-reader").apply { isDaemon = true }.start()
     }
 
@@ -137,6 +146,14 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
 
     fun stat(path: String): Attrs = call(FXP_STAT) { string(path) }.expect(FXP_ATTRS).buf.attrs()
 
+    fun lstat(path: String): Attrs = call(FXP_LSTAT) { string(path) }.expect(FXP_ATTRS).buf.attrs()
+
+    fun readlink(path: String): String {
+        val p = call(FXP_READLINK) { string(path) }.expect(FXP_NAME)
+        p.buf.getInt()
+        return p.buf.string()
+    }
+
     fun list(dir: String): List<Entry> {
         val handle = call(FXP_OPENDIR) { string(dir) }.expect(FXP_HANDLE).buf.bytes()
         try {
@@ -168,19 +185,38 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
     fun rename(from: String, to: String) = okStatus(FXP_RENAME) { string(from); string(to) }
     fun chmod(path: String, mode: Int) = okStatus(FXP_SETSTAT) { string(path); int(ATTR_PERMISSIONS); int(mode) }
 
+    fun chown(path: String, uid: Int, gid: Int) = okStatus(FXP_SETSTAT) { string(path); int(ATTR_UIDGID); int(uid); int(gid) }
+
+    /** Takes the name over atomically where the server allows it; plain SFTP refuses a taken name. */
+    fun renameOver(from: String, to: String) {
+        if (POSIX_RENAME in extensions) okStatus(FXP_EXTENDED) { string(POSIX_RENAME); string(from); string(to) }
+        else { runCatching { remove(to) }; rename(from, to) }
+    }
+
+    fun setMtime(path: String, seconds: Long) {
+        val time = seconds.toInt()
+        okStatus(FXP_SETSTAT) { string(path); int(ATTR_ACMODTIME); int(time); int(time) }
+    }
+
     fun open(path: String, flags: Int): ByteArray =
         call(FXP_OPEN) { string(path); int(flags); int(0) }.expect(FXP_HANDLE).buf.bytes()
 
     fun closeHandle(handle: ByteArray) = okStatus(FXP_CLOSE) { bytes(handle) }
 
-    fun openInputStream(path: String): InputStream = ReadStream(open(path, FXF_READ))
+    fun openInputStream(path: String, offset: Long = 0): InputStream = ReadStream(open(path, FXF_READ), offset)
 
     fun openOutputStream(path: String, exclusive: Boolean = false): OutputStream =
-        WriteStream(open(path, FXF_WRITE or FXF_CREAT or if (exclusive) FXF_EXCL else FXF_TRUNC))
+        WriteStream(open(path, FXF_WRITE or FXF_CREAT or if (exclusive) FXF_EXCL else FXF_TRUNC), 0)
 
-    private inner class ReadStream(private val handle: ByteArray) : InputStream() {
+    /** Writes at an explicit offset: FXF_APPEND is not honoured by every server. */
+    fun openAppendStream(path: String): OutputStream {
+        val size = stat(path).size ?: 0L
+        return WriteStream(open(path, FXF_WRITE), size)
+    }
+
+    private inner class ReadStream(private val handle: ByteArray, start: Long) : InputStream() {
         private val ahead = ArrayDeque<Pair<Long, CompletableFuture<Packet>>>()
-        private var nextOffset = 0L
+        private var nextOffset = start
         private var chunk = ByteArray(0)
         private var pos = 0
         private var eof = false
@@ -231,10 +267,10 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         }
     }
 
-    private inner class WriteStream(private val handle: ByteArray) : OutputStream() {
+    private inner class WriteStream(private val handle: ByteArray, start: Long) : OutputStream() {
         private val buffer = ByteArray(CHUNK)
         private var used = 0
-        private var offset = 0L
+        private var offset = start
         private val inFlight = ArrayDeque<CompletableFuture<Packet>>()
         private var closed = false
 
@@ -305,6 +341,7 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         private const val FXP_CLOSE = 4
         private const val FXP_READ = 5
         private const val FXP_WRITE = 6
+        private const val FXP_LSTAT = 7
         private const val FXP_SETSTAT = 9
         private const val FXP_OPENDIR = 11
         private const val FXP_READDIR = 12
@@ -314,6 +351,8 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         private const val FXP_REALPATH = 16
         private const val FXP_STAT = 17
         private const val FXP_RENAME = 18
+        private const val FXP_READLINK = 19
+        private const val FXP_EXTENDED = 200
         private const val FXP_STATUS = 101
         private const val FXP_HANDLE = 102
         private const val FXP_DATA = 103
@@ -335,13 +374,17 @@ class SftpChannel(input: InputStream, output: OutputStream) : Closeable {
         private const val FX_OK = 0
         private const val FX_EOF = 1
 
+        const val FX_NO_SUCH_FILE = 2
+
         const val S_IFMT = 0xF000
         const val S_IFDIR = 0x4000
         const val S_IFLNK = 0xA000
 
         private const val CHUNK = 32 * 1024
-        private const val READ_AHEAD = 16
-        private const val WRITE_AHEAD = 16
+        private const val POSIX_RENAME = "posix-rename@openssh.com"
+        // 2 MB on the way: at 100 ms to the server that allows 20 MB/s.
+        private const val READ_AHEAD = 64
+        private const val WRITE_AHEAD = 64
         private const val MAX_PACKET = 256 * 1024 + 64
         // Bounds what a misbehaving server can make the app hold for one listing.
         private const val MAX_ENTRIES = 500_000

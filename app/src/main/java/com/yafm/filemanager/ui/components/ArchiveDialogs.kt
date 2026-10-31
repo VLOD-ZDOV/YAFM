@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +45,9 @@ fun ExtractArchiveDialog(
     progress: ArchiveManager.Progress?,
     isExtracting: Boolean,
     onDismiss: () -> Unit,
-    onExtract: (destinationPath: String, conflict: ArchiveManager.Conflict) -> Unit
+    onExtract: (destinationPath: String, conflict: ArchiveManager.Conflict) -> Unit,
+    /** Set for an archive on a server that can unpack it itself. */
+    onExtractOnServer: (() -> Unit)? = null
 ) {
     // "pack.tar.lz4" -> "pack": a tar inside a compressor loses both suffixes.
     val baseName = archiveItem.name.replace(Regex("(\\.tar)?\\.[^.]+$", RegexOption.IGNORE_CASE), "").ifEmpty { archiveItem.name }
@@ -123,6 +126,7 @@ fun ExtractArchiveDialog(
         },
         dismissButton = {
             if (!isExtracting) {
+                onExtractOnServer?.let { TextButton(onClick = it) { Text(str(R.string.on_server)) } }
                 TextButton(onClick = onDismiss) {
                     Text(str(R.string.cancel))
                 }
@@ -138,10 +142,13 @@ fun CompressDialog(
     progress: ArchiveManager.Progress?,
     isCompressing: Boolean,
     onDismiss: () -> Unit,
-    onCompress: (archiveName: String, format: ArchiveManager.Format) -> Unit
+    onCompress: (archiveName: String, format: ArchiveManager.Format) -> Unit,
+    /** Set when the files are on a server that can pack them itself. */
+    onCompressOnServer: ((archiveName: String, format: ArchiveManager.Format) -> Unit)? = null
 ) {
     var baseName by remember { mutableStateOf("Archive") }
     var format by remember { mutableStateOf(ArchiveManager.Format.ZIP) }
+    var onServer by remember { mutableStateOf(onCompressOnServer != null) }
 
     AlertDialog(
         onDismissRequest = { if (!isCompressing) onDismiss() },
@@ -188,13 +195,22 @@ fun CompressDialog(
                             FilterChip(selected = format == f, onClick = { format = f }, label = { Text(f.label) })
                         }
                     }
+                    if (onCompressOnServer != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(checked = onServer, onCheckedChange = { onServer = it })
+                            Text(str(R.string.on_server), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             if (!isCompressing) {
                 Button(
-                    onClick = { onCompress(baseName.trim().removeSuffix(format.extension) + format.extension, format) },
+                    onClick = {
+                        val name = baseName.trim().removeSuffix(format.extension) + format.extension
+                        if (onServer) onCompressOnServer?.invoke(name, format) else onCompress(name, format)
+                    },
                     enabled = baseName.isNotBlank() && '/' !in baseName
                 ) {
                     Text(str(R.string.compress))

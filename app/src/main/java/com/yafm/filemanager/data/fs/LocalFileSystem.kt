@@ -42,6 +42,26 @@ class LocalFileSystem(
 
     override fun openWrite(path: String): OutputStream = orRoot({ FileOutputStream(path) }, { root.openWrite(path) })
 
+    override fun openRead(path: String, offset: Long): InputStream =
+        FileInputStream(path).also { it.channel.position(offset) }
+
+    override fun openAppend(path: String): OutputStream = FileOutputStream(path, true)
+
+    override val canAppend: Boolean get() = true
+
+    override fun stat(path: String): FileStat? {
+        val file = File(path)
+        return if (file.exists()) FileStat(file.length(), file.isDirectory) else null
+    }
+
+    override fun setModified(path: String, millis: Long) {
+        File(path).setLastModified(millis)
+    }
+
+    override fun replace(from: String, to: String) = orRoot({
+        if (!File(from).renameTo(File(to))) throw IOException(str(R.string.could_not_rename))
+    }, { super.replace(from, to) })
+
     override fun mkdir(path: String) = orRoot({
         val dir = File(path)
         if (!dir.mkdirs() && !dir.isDirectory) throw IOException(str(R.string.could_not_create_the_folder))
