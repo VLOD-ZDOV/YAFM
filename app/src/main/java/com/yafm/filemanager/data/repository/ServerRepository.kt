@@ -78,6 +78,35 @@ class ServerRepository(context: Context, private val onChanged: (String) -> Unit
         onChanged(id)
     }
 
+    /** Moves a server up ([by] < 0) or down the list. */
+    fun move(id: String, by: Int) {
+        val list = _servers.value.toMutableList()
+        val from = list.indexOfFirst { it.id == id }
+        if (from < 0) return
+        val to = (from + by).coerceIn(0, list.size - 1)
+        if (to == from) return
+        list.add(to, list.removeAt(from))
+        persist(list)
+    }
+
+    /** A copy under a new id, right after the original; an imported key gets its own copy, as delete removes it. */
+    fun duplicate(id: String, name: String): ServerConfig? {
+        val src = getServer(id) ?: return null
+        var copy = src.copy(id = java.util.UUID.randomUUID().toString(), name = name)
+        if (src.keyPath.isNotEmpty()) {
+            val key = java.io.File(src.keyPath)
+            val dest = java.io.File(key.parentFile, "${copy.id}.key")
+            copy = if (runCatching { key.copyTo(dest, overwrite = true) }.isSuccess) {
+                runCatching { android.system.Os.chmod(dest.path, "600".toInt(8)) }
+                copy.copy(keyPath = dest.path)
+            } else copy.copy(keyPath = "")
+        }
+        val list = _servers.value.toMutableList()
+        list.add(list.indexOfFirst { it.id == id } + 1, copy)
+        persist(list)
+        return copy
+    }
+
     fun getServer(id: String): ServerConfig? {
         return _servers.value.firstOrNull { it.id == id }
     }

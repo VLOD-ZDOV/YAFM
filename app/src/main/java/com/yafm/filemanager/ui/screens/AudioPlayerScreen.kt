@@ -35,6 +35,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -107,6 +115,7 @@ private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 fun AudioPlayerScreen(
     file: File?,
     playlist: List<File>,
+    seekStepMs: Long,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -122,18 +131,28 @@ fun AudioPlayerScreen(
     var showSpeeds by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
     var queue by remember(playlist, file) { mutableStateOf(if (file == null) emptyList() else playlist.ifEmpty { listOf(file) }) }
+    // Bumped when the service drops the connection: a new controller is made.
+    var connection by remember { mutableIntStateOf(0) }
+    var started by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onNavigateBack)
 
-    DisposableEffect(Unit) {
+    DisposableEffect(connection) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val future = MediaController.Builder(context, token)
+            .setListener(object : MediaController.Listener {
+                override fun onDisconnected(controller: MediaController) {
+                    connection++
+                }
+            })
+            .buildAsync()
         fun sync(player: Player) {
             playing = player.isPlaying
             duration = player.duration.coerceAtLeast(0L)
             position = player.currentPosition
             meta = player.mediaMetadata
-            index = player.currentMediaItemIndex
+            // An emptied player (the notification's cross) keeps the track the screen shows.
+            if (player.mediaItemCount > 0) index = player.currentMediaItemIndex
             shuffle = player.shuffleModeEnabled
             repeat = player.repeatMode
             speed = player.playbackParameters.speed
@@ -147,31 +166,52 @@ fun AudioPlayerScreen(
             c.addListener(listener)
             // Events come only on changes: a track that already plays must be shown right away.
             sync(c)
+            if (started) return@addListener
+            started = true
             if (file == null) {
                 // Opened from the notification: show the queue that plays.
                 queue = (0 until c.mediaItemCount).map { File(c.getMediaItemAt(it).mediaId) }
                 return@addListener
             }
-            val items = queue.map { f ->
-                MediaItem.Builder()
-                    .setMediaId(f.absolutePath)
-                    .setUri(Uri.fromFile(f))
-                    // No title here: it would hide the one from the file's tags. Without tags the
-                    // screen falls back to the file name.
-                    .build()
-            }
             val start = queue.indexOfFirst { it.absolutePath == file.absolutePath }.coerceAtLeast(0)
             // Opening the track that is already playing keeps it going instead of starting over.
             if (c.currentMediaItem?.mediaId != file.absolutePath) {
-                c.setMediaItems(items, start, 0L)
+                c.setMediaItems(mediaItems(queue), start, 0L)
+                c.prepare()
+                c.play()
+            } else if (c.playbackState == Player.STATE_IDLE) {
                 c.prepare()
                 c.play()
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             controller?.removeListener(listener)
+            controller = null
             MediaController.releaseFuture(future)
         }
+    }
+
+    /**
+     * The cross in the notification empties the player; the screen still shows its queue, so any button
+     * loads it again at [at] instead of doing nothing. True when it was loaded.
+     */
+    fun ready(c: MediaController, at: Int = index, positionMs: Long = 0L): Boolean {
+        if (c.mediaItemCount == 0) {
+            if (queue.isEmpty()) return false
+            c.setMediaItems(mediaItems(queue), at.coerceIn(0, queue.size - 1), positionMs)
+            c.prepare()
+            return true
+        }
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        return false
+    }
+
+    fun seekBy(ms: Long) {
+        val c = controller ?: return
+        if (ready(c, index, (position + ms).coerceAtLeast(0L))) return
+        val end = c.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        c.seekTo((c.currentPosition + ms).coerceIn(0L, end))
+        position = c.currentPosition
     }
 
     // The position moves only while playing: a paused player is read once, not polled.
@@ -235,11 +275,29 @@ fun AudioPlayerScreen(
         Slider(
             value = sliding ?: position.toFloat().coerceAtMost(duration.toFloat()),
             onValueChange = { sliding = it },
-            onValueChangeFinished = { sliding?.let { controller?.seekTo(it.toLong()) }; sliding = null },
+            onValueChangeFinished = {
+                sliding?.let { to -> controller?.let { c -> if (!ready(c, index, to.toLong())) c.seekTo(to.toLong()) } }
+                sliding = null
+            },
             valueRange = 0f..maxOf(duration.toFloat(), 1f)
         )
-        Row(Modifier.fillMaxWidth()) {
+        // Times at the edges, seek back/forward by the step from the settings between them.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(formatClock(sliding?.toLong() ?: position), style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.weight(1f))
+            val seconds = (seekStepMs / 1000).toInt()
+            IconButton(onClick = { seekBy(-seekStepMs) }) {
+                Icon(
+                    when (seconds) { 5 -> Icons.Default.Replay5; 10 -> Icons.Default.Replay10; 30 -> Icons.Default.Replay30; else -> Icons.Default.FastRewind },
+                    contentDescription = str(R.string.seek_back_seconds, seconds)
+                )
+            }
+            IconButton(onClick = { seekBy(seekStepMs) }) {
+                Icon(
+                    when (seconds) { 5 -> Icons.Default.Forward5; 10 -> Icons.Default.Forward10; 30 -> Icons.Default.Forward30; else -> Icons.Default.FastForward },
+                    contentDescription = str(R.string.seek_forward_seconds, seconds)
+                )
+            }
             Spacer(Modifier.weight(1f))
             Text(formatClock(duration), style = MaterialTheme.typography.bodySmall)
         }
@@ -256,11 +314,18 @@ fun AudioPlayerScreen(
                     tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = { controller?.seekToPrevious() }) {
+            IconButton(onClick = {
+                controller?.let { c -> if (ready(c, (index - 1).mod(queue.size.coerceAtLeast(1)))) c.play() else c.seekToPrevious() }
+            }) {
                 Icon(Icons.Default.SkipPrevious, contentDescription = str(R.string.previous), modifier = Modifier.size(36.dp))
             }
             FilledIconButton(
-                onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                onClick = {
+                    controller?.let { c ->
+                        ready(c, index, position)
+                        if (c.isPlaying) c.pause() else c.play()
+                    }
+                },
                 modifier = Modifier.size(64.dp)
             ) {
                 Icon(
@@ -269,7 +334,9 @@ fun AudioPlayerScreen(
                     modifier = Modifier.size(36.dp)
                 )
             }
-            IconButton(onClick = { controller?.seekToNext() }) {
+            IconButton(onClick = {
+                controller?.let { c -> if (ready(c, (index + 1) % queue.size.coerceAtLeast(1))) c.play() else c.seekToNext() }
+            }) {
                 Icon(Icons.Default.SkipNext, contentDescription = str(R.string.next), modifier = Modifier.size(36.dp))
             }
             IconButton(onClick = {
@@ -302,7 +369,12 @@ fun AudioPlayerScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { controller?.seekTo(i, 0L); controller?.play() }
+                        .clickable {
+                            controller?.let { c ->
+                                if (!ready(c, i)) c.seekTo(i, 0L)
+                                c.play()
+                            }
+                        }
                         .padding(vertical = 10.dp)
                 )
             }
@@ -387,6 +459,15 @@ fun AudioPlayerScreen(
             }
         }
     }
+}
+
+private fun mediaItems(files: List<File>) = files.map { f ->
+    MediaItem.Builder()
+        .setMediaId(f.absolutePath)
+        .setUri(Uri.fromFile(f))
+        // No title here: it would hide the one from the file's tags. Without tags the
+        // screen falls back to the file name.
+        .build()
 }
 
 /** Cover art at most about [max] px a side. */

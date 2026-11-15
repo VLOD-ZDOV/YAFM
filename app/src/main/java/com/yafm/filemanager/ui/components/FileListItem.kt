@@ -177,7 +177,7 @@ fun FileListItem(
                     IconButton(onClick = { showMenu = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options",
+                            contentDescription = str(R.string.item_options),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

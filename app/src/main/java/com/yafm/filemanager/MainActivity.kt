@@ -1,5 +1,17 @@
 package com.yafm.filemanager
 
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.runtime.collectAsState
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -66,7 +78,8 @@ sealed class AppScreen {
     data object Home : AppScreen()
     data object Explorer : AppScreen()
     data class TextEditor(val file: FileItem, val back: AppScreen = Explorer) : AppScreen()
-    data class ImageViewer(val file: FileItem, val back: AppScreen = Explorer) : AppScreen()
+    /** [images]: the folder's pictures, to swipe through. */
+    data class ImageViewer(val file: FileItem, val back: AppScreen = Explorer, val images: List<FileItem> = emptyList()) : AppScreen()
     /** An archive browsed like a folder; [folder] is where it was left. */
     data class ArchiveBrowser(val file: FileItem, val back: AppScreen, val folder: String = "") : AppScreen()
     data class ImageEditor(val file: FileItem, val back: AppScreen) : AppScreen()
@@ -75,7 +88,14 @@ sealed class AppScreen {
     data object Duplicates : AppScreen()
     data object RootTerminal : AppScreen()
     data object Settings : AppScreen()
-    data class VideoPlayer(val file: java.io.File, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
+    data object ThemeEditor : AppScreen()
+    /** [streams]: links for entries of [playlist] that play from a server, by their path. */
+    data class VideoPlayer(
+        val file: java.io.File,
+        val playlist: List<java.io.File>,
+        val back: AppScreen = Explorer,
+        val streams: Map<String, android.net.Uri> = emptyMap()
+    ) : AppScreen()
     /** No [file]: shows what is already playing. */
     data class AudioPlayer(val file: java.io.File?, val playlist: List<java.io.File>, val back: AppScreen = Explorer) : AppScreen()
 }
@@ -137,24 +157,30 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        checkAndRequestStoragePermissions()
+        // Android 11+: a short explanation first (in FileManagerApp), the system page only on "Allow".
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) checkAndRequestStoragePermissions()
         if (savedInstanceState == null) handle(intent)
 
         val settings = (application as YafmApp).settings
         setContent {
             val s by settings.settings.collectAsState()
-            YafmTheme(theme = s.theme, dynamicColor = s.dynamicColor) {
+            YafmTheme(theme = s.theme, palette = s.palette, custom = s.customTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FileManagerApp(viewModel = viewModel, openPlayer = openPlayer, incoming = incoming)
+                    FileManagerApp(
+                        viewModel = viewModel,
+                        openPlayer = openPlayer,
+                        incoming = incoming,
+                        onAllowAllFiles = ::checkAndRequestStoragePermissions
+                    )
                 }
             }
         }
     }
 
-    private fun checkAndRequestStoragePermissions() {
+    fun checkAndRequestStoragePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 try {
@@ -183,8 +209,21 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlow<Boolean>, incoming: MutableStateFlow<Uri?>) {
+fun FileManagerApp(
+    viewModel: FileExplorerViewModel,
+    openPlayer: MutableStateFlow<Boolean>,
+    incoming: MutableStateFlow<Uri?>,
+    onAllowAllFiles: () -> Unit
+) {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
+    AllFilesAccessPrompt(onAllowAllFiles)
+    NotificationPermissionPrompt(
+        wanted = currentScreen is AppScreen.AudioPlayer || viewModel.transfers.collectAsState().value.current != null
+    )
+    var dualPane by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var activePane by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // The pane a screen was opened from: duplicates, archives and saved photos act on its folder.
+    var paneVm by remember { mutableStateOf(viewModel) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     IncomingFileDialog(
@@ -263,33 +302,70 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                 )
             }
             is AppScreen.Explorer -> {
-                ExplorerScreen(
-                    viewModel = viewModel,
+                @Composable
+                fun pane(vm: FileExplorerViewModel, index: Int, other: FileExplorerViewModel?) {
+                    if (!dualPane || activePane == index) androidx.compose.runtime.SideEffect { paneVm = vm }
+                    ExplorerScreen(
+                    viewModel = vm,
                     onNavigateBack = {
-                        currentScreen = AppScreen.Home
+                        // The second pane closes; the first one leaves the explorer.
+                        if (index == 1) { dualPane = false; activePane = 0 } else currentScreen = AppScreen.Home
                     },
-                    onOpenFileInEditor = { file ->
-                        currentScreen = AppScreen.TextEditor(file)
-                    },
+                    onOpenFileInEditor = { file -> currentScreen = AppScreen.TextEditor(file) },
                     onOpenImage = { file ->
-                        currentScreen = AppScreen.ImageViewer(file)
+                        val images = vm.fileList.value.filter { it.category == FileCategory.IMAGE && !it.isDirectory }
+                        currentScreen = AppScreen.ImageViewer(file, images = images)
                     },
-                    onOpenVideo = { file, playlist ->
-                        currentScreen = AppScreen.VideoPlayer(file, playlist)
+                    onOpenVideo = { file, playlist, streams ->
+                        currentScreen = AppScreen.VideoPlayer(file, playlist, streams = streams)
                     },
-                    onOpenAudio = { file, playlist ->
-                        currentScreen = AppScreen.AudioPlayer(file, playlist)
-                    },
-                    onEditImage = { file ->
-                        currentScreen = AppScreen.ImageEditor(file, back = AppScreen.Explorer)
-                    },
-                    onOpenArchive = { file ->
-                        currentScreen = AppScreen.ArchiveBrowser(file, back = AppScreen.Explorer)
-                    },
-                    onOpenDuplicates = {
-                        currentScreen = AppScreen.Duplicates
-                    }
+                    onOpenAudio = { file, playlist -> currentScreen = AppScreen.AudioPlayer(file, playlist) },
+                    onEditImage = { file -> currentScreen = AppScreen.ImageEditor(file, back = AppScreen.Explorer) },
+                    onOpenArchive = { file -> currentScreen = AppScreen.ArchiveBrowser(file, back = AppScreen.Explorer) },
+                    onOpenDuplicates = { currentScreen = AppScreen.Duplicates },
+                    active = !dualPane || activePane == index,
+                    dual = dualPane,
+                    onToggleDual = { dualPane = !dualPane; activePane = 0; paneVm = viewModel },
+                    otherLocation = other?.location?.collectAsState()?.value
                 )
+                }
+                if (!dualPane) {
+                    pane(viewModel, 0, null)
+                } else {
+                    // Made the first time two panes are opened, not on every start.
+                    val secondPane: FileExplorerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "second")
+                    remember(secondPane) { secondPane.isSecondPane = true }
+                    // Two folders at once, e.g. a server above and the phone below: copy or move between them.
+                    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+                        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    val accent = MaterialTheme.colorScheme.primary
+                    @Composable
+                    fun framed(index: Int, modifier: Modifier, content: @Composable () -> Unit) = Box(
+                        modifier
+                            .pointerInput(Unit) {
+                                // Seen before the pane handles the touch, which it still gets.
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                    activePane = index
+                                }
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                if (activePane == index) drawRect(accent, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                            }
+                    ) { content() }
+                    if (landscape) {
+                        Row(Modifier.fillMaxSize()) {
+                            framed(0, Modifier.weight(1f)) { pane(viewModel, 0, secondPane) }
+                            framed(1, Modifier.weight(1f)) { pane(secondPane, 1, viewModel) }
+                        }
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            framed(0, Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { pane(viewModel, 0, secondPane) }
+                            framed(1, Modifier.weight(1f).consumeWindowInsets(WindowInsets.statusBars)) { pane(secondPane, 1, viewModel) }
+                        }
+                    }
+                }
             }
             is AppScreen.TextEditor -> {
                 TextEditorScreen(
@@ -303,10 +379,12 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
             is AppScreen.ImageViewer -> {
                 ImageViewerScreen(
                     fileItem = screen.file,
+                    images = screen.images,
                     onNavigateBack = {
                         currentScreen = screen.back
                     },
-                    onEdit = { currentScreen = AppScreen.ImageEditor(screen.file, back = screen) }
+                    // Back from the editor returns to the picture that was edited.
+                    onEdit = { item -> currentScreen = AppScreen.ImageEditor(item, back = screen.copy(file = item)) }
                 )
             }
             is AppScreen.ImageEditor -> {
@@ -314,7 +392,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                     fileItem = screen.file,
                     onNavigateBack = { currentScreen = screen.back },
                     onSaved = {
-                        viewModel.loadCurrentDirectory()
+                        paneVm.loadCurrentDirectory()
                         currentScreen = AppScreen.Explorer
                     }
                 )
@@ -322,7 +400,7 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
             is AppScreen.ArchiveBrowser -> {
                 ArchiveBrowserScreen(
                     archiveItem = screen.file,
-                    viewModel = viewModel,
+                    viewModel = paneVm,
                     startFolder = screen.folder,
                     onNavigateBack = { currentScreen = screen.back },
                     onOpenFile = { item, folder ->
@@ -365,11 +443,11 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
             }
             is AppScreen.Duplicates -> {
                 DuplicatesScreen(
-                    viewModel = viewModel,
+                    viewModel = paneVm,
                     onNavigateBack = { currentScreen = AppScreen.Explorer },
                     onOpenFolder = { folder ->
-                        viewModel.cancelDuplicates()
-                        viewModel.navigateToLocal(folder)
+                        paneVm.cancelDuplicates()
+                        paneVm.navigateToLocal(folder)
                         currentScreen = AppScreen.Explorer
                     }
                 )
@@ -379,16 +457,29 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
                 VideoPlayerScreen(
                     file = screen.file,
                     playlist = screen.playlist,
+                    streams = screen.streams,
                     seekStepMs = s.seekSeconds * 1000L,
                     sideGestures = s.videoSideGestures,
                     onNavigateBack = { currentScreen = screen.back }
                 )
             }
             is AppScreen.AudioPlayer -> {
-                AudioPlayerScreen(file = screen.file, playlist = screen.playlist, onNavigateBack = { currentScreen = screen.back })
+                AudioPlayerScreen(
+                    file = screen.file,
+                    playlist = screen.playlist,
+                    seekStepMs = viewModel.settings.settings.value.seekSeconds * 1000L,
+                    onNavigateBack = { currentScreen = screen.back }
+                )
             }
             is AppScreen.Settings -> {
-                SettingsScreen(viewModel = viewModel, onNavigateBack = { currentScreen = AppScreen.Home })
+                SettingsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = AppScreen.Home },
+                    onOpenThemeEditor = { currentScreen = AppScreen.ThemeEditor }
+                )
+            }
+            is AppScreen.ThemeEditor -> {
+                com.yafm.filemanager.ui.screens.ThemeEditorScreen(viewModel = viewModel, onNavigateBack = { currentScreen = AppScreen.Settings })
             }
             is AppScreen.RootTerminal -> {
                 RootTerminalScreen(
@@ -407,5 +498,49 @@ fun FileManagerApp(viewModel: FileExplorerViewModel, openPlayer: MutableStateFlo
             modifier = Modifier.navigationBarsPadding()
         )
     }
+    }
+}
+
+/**
+ * Android 11+: what "All files access" is for, before the system page. "Later" keeps the app usable with
+ * what it can reach without it (servers, root); the card comes back on the next start until it is given.
+ */
+@Composable
+private fun AllFilesAccessPrompt(onAllow: () -> Unit) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+    var granted by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+    var later by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Back from the system page: look again.
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) granted = Environment.isExternalStorageManager()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    if (granted || later) return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { later = true },
+        icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.FolderOpen, contentDescription = null) },
+        title = { androidx.compose.material3.Text(str(R.string.all_files_title)) },
+        text = { androidx.compose.material3.Text(str(R.string.all_files_text)) },
+        confirmButton = { androidx.compose.material3.Button(onClick = onAllow) { androidx.compose.material3.Text(str(R.string.allow)) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { later = true }) { androidx.compose.material3.Text(str(R.string.later)) } }
+    )
+}
+
+/** Android 13+: notifications are asked for once, when music or a transfer first needs them. */
+@Composable
+private fun NotificationPermissionPrompt(wanted: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    androidx.compose.runtime.LaunchedEffect(wanted) {
+        if (!wanted || prefs.getBoolean("askedNotifications", false)) return@LaunchedEffect
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return@LaunchedEffect
+        prefs.edit().putBoolean("askedNotifications", true).apply()
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }

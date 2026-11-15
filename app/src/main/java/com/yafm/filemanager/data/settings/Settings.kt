@@ -12,7 +12,8 @@ enum class VideoPlayer { ASK, BUILT_IN, SYSTEM }
 
 data class Settings(
     val theme: ThemeMode = ThemeMode.SYSTEM,
-    val dynamicColor: Boolean = true,
+    val palette: Palette = Palette.DYNAMIC,
+    val customTheme: CustomTheme = CustomTheme(),
     val videoPlayer: VideoPlayer = VideoPlayer.ASK,
     val autoUpdate: Boolean = true,
     val showHidden: Boolean = false,
@@ -37,7 +38,9 @@ class SettingsRepository(context: Context) {
 
     private fun load() = Settings(
         theme = enumOr(prefs.getString("theme", null), ThemeMode.SYSTEM),
-        dynamicColor = prefs.getBoolean("dynamicColor", true),
+        // Before palettes there was only a wallpaper colors switch.
+        palette = Palette.of(prefs.getString("palette", null), if (prefs.getBoolean("dynamicColor", true)) Palette.DYNAMIC else Palette.BLUE),
+        customTheme = CustomTheme.decode(prefs.getString("customTheme", null)),
         videoPlayer = enumOr(prefs.getString("videoPlayer", null), VideoPlayer.ASK),
         autoUpdate = prefs.getBoolean("autoUpdate", true),
         showHidden = prefs.getBoolean("showHidden", false),
@@ -67,7 +70,8 @@ class SettingsRepository(context: Context) {
         _settings.value = s
         prefs.edit()
             .putString("theme", s.theme.name)
-            .putBoolean("dynamicColor", s.dynamicColor)
+            .putString("palette", s.palette.name)
+            .putString("customTheme", s.customTheme.encode())
             .putString("videoPlayer", s.videoPlayer.name)
             .putBoolean("autoUpdate", s.autoUpdate)
             .putBoolean("showHidden", s.showHidden)

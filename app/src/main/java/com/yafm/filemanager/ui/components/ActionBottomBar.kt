@@ -108,14 +108,15 @@ fun ActionBottomBar(
                     }
                 }
             }
+            // Five buttons fit a 360 dp phone; the rest is under "More".
+            val overflow = buildList {
+                if (hasArchiveSelected) add(str(R.string.extract) to onExtract)
+                add(str(R.string.to_zip) to onCompress)
+                if (selectedCount > 1) add(str(R.string.batch_rename) to onBatchRename)
+                addAll(moreActions)
+                if (canChangePermissions) add(str(R.string.permissions) to onPermissions)
+            }
             val actions = @Composable {
-                    if (hasArchiveSelected) {
-                        ActionButton(icon = Icons.Default.Unarchive, label = str(R.string.extract), onClick = onExtract)
-                    }
-                    ActionButton(icon = Icons.Default.FolderZip, label = str(R.string.to_zip), onClick = onCompress)
-                    if (selectedCount > 1) {
-                        ActionButton(icon = Icons.Default.DriveFileRenameOutline, label = str(R.string.batch), onClick = onBatchRename)
-                    }
                     ActionButton(icon = Icons.Default.ContentCopy, label = str(R.string.copy), onClick = onCopy)
                     ActionButton(icon = Icons.Default.ContentCut, label = str(R.string.cut), onClick = onCut)
                     ActionButton(icon = Icons.Default.Share, label = str(R.string.share), onClick = onShare)
@@ -125,20 +126,20 @@ fun ActionBottomBar(
                         onClick = onDelete,
                         tint = MaterialTheme.colorScheme.error
                     )
-                    // Permissions and the rest live here so the row fits a phone's width.
                     Box {
                         var open by remember { mutableStateOf(false) }
                         ActionButton(icon = Icons.Default.MoreVert, label = str(R.string.more), onClick = { open = true })
                         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                            val all = if (canChangePermissions) moreActions + (str(R.string.permissions) to onPermissions) else moreActions
-                            all.forEach { (label, action) ->
+                            overflow.forEach { (label, action) ->
                                 DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
                             }
                         }
                     }
             }
-            // Landscape has little height: everything goes in one row.
-            if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            // Landscape has little height: everything goes in one row, where it fits (not in half a screen
+            // of the two-pane view).
+            androidx.compose.foundation.layout.BoxWithConstraints {
+            if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE && maxWidth >= 600.dp) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,6 +171,7 @@ fun ActionBottomBar(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) { actions() }
                 }
+            }
             }
         }
     }

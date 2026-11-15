@@ -1,5 +1,13 @@
 package com.yafm.filemanager.ui.screens
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.input.KeyboardType
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
 import android.graphics.Bitmap
@@ -116,6 +124,10 @@ fun ImageEditorScreen(
     var changed by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     var redraw by remember { mutableIntStateOf(0) }
+    // Crop: the frame in the picture's pixels; ratio null is free.
+    var cropping by remember { mutableStateOf(false) }
+    var crop by remember { mutableStateOf(Rect.Zero) }
+    var ratio by remember { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(fileItem.path) {
         val (bmp, scaled) = withContext(Dispatchers.IO) { decode(fileItem.path) }
@@ -123,7 +135,11 @@ fun ImageEditorScreen(
         downscaled = scaled
     }
 
-    fun leave() = if (changed || strokes.isNotEmpty()) confirmLeave = true else onNavigateBack()
+    fun leave() = when {
+        cropping -> cropping = false
+        changed || strokes.isNotEmpty() -> confirmLeave = true
+        else -> onNavigateBack()
+    }
     BackHandler { leave() }
 
     /** Strokes are drawn into the picture before any other change, so they turn and flip with it. */
@@ -153,6 +169,37 @@ fun ImageEditorScreen(
         while (history.size > 4) history.removeAt(0)
         bitmap = transform(src)
         changed = true
+    }
+
+    /** The biggest frame of [r] (width / height) in the middle of the picture; null: the whole picture. */
+    fun frameFor(r: Float?) {
+        val b = bitmap ?: return
+        val w = b.width.toFloat()
+        val h = b.height.toFloat()
+        crop = if (r == null) Rect(0f, 0f, w, h) else {
+            val fw = minOf(w, h * r)
+            val fh = fw / r
+            Rect((w - fw) / 2, (h - fh) / 2, (w + fw) / 2, (h + fh) / 2)
+        }
+    }
+
+    fun startCrop() {
+        drawing = false
+        ratio = null
+        frameFor(null)
+        cropping = true
+    }
+
+    fun applyCrop() {
+        val r = crop
+        cropping = false
+        apply { src ->
+            val x = r.left.toInt().coerceIn(0, src.width - 1)
+            val y = r.top.toInt().coerceIn(0, src.height - 1)
+            val w = r.width.toInt().coerceIn(1, src.width - x)
+            val h = r.height.toInt().coerceIn(1, src.height - y)
+            Bitmap.createBitmap(src, x, y, w, h)
+        }
     }
 
     fun undo() {
@@ -220,6 +267,50 @@ fun ImageEditorScreen(
                 text = {
                     Column {
                         Text("${bmp.width} × ${bmp.height}")
+                        var typedW by remember { mutableStateOf(bmp.width.toString()) }
+                        var typedH by remember { mutableStateOf(bmp.height.toString()) }
+                        var keep by remember { mutableStateOf(true) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = typedW,
+                                onValueChange = { v ->
+                                    typedW = v.filter(Char::isDigit).take(5)
+                                    if (keep) typedW.toIntOrNull()?.let { typedH = (it.toLong() * bmp.height / bmp.width).coerceAtLeast(1).toString() }
+                                },
+                                label = { Text(str(R.string.width)) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(" × ")
+                            OutlinedTextField(
+                                value = typedH,
+                                onValueChange = { v ->
+                                    typedH = v.filter(Char::isDigit).take(5)
+                                    if (keep) typedH.toIntOrNull()?.let { typedW = (it.toLong() * bmp.width / bmp.height).coerceAtLeast(1).toString() }
+                                },
+                                label = { Text(str(R.string.height)) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { keep = !keep }) {
+                            Checkbox(checked = keep, onCheckedChange = { keep = it })
+                            Text(str(R.string.keep_proportions))
+                        }
+                        val w = typedW.toIntOrNull()
+                        val h = typedH.toIntOrNull()
+                        // Larger than the editing limit would not fit in memory.
+                        val ok = w != null && h != null && w in 1..MAX_SIDE && h in 1..MAX_SIDE
+                        Button(
+                            onClick = {
+                                showResize = false
+                                apply { Bitmap.createScaledBitmap(it, w!!, h!!, true) }
+                            },
+                            enabled = ok
+                        ) { Text(str(R.string.apply)) }
+                        Spacer(Modifier.height(8.dp))
                         listOf(75, 50, 25).forEach { pct ->
                             val w = bmp.width * pct / 100
                             val h = bmp.height * pct / 100
@@ -267,6 +358,31 @@ fun ImageEditorScreen(
                 if (downscaled) {
                     Text(str(R.string.edited_downscaled, MAX_SIDE), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                 }
+                if (cropping) {
+                    val b = bitmap
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        listOf<Pair<String, Float?>>(
+                            str(R.string.crop_free) to null,
+                            str(R.string.crop_original) to (b?.let { it.width.toFloat() / it.height } ?: 1f),
+                            "1:1" to 1f, "4:3" to 4f / 3f, "3:4" to 3f / 4f, "16:9" to 16f / 9f, "9:16" to 9f / 16f, "3:2" to 1.5f
+                        ).forEach { (label, r) ->
+                            FilterChip(
+                                selected = ratio == r,
+                                onClick = { ratio = r; frameFor(r) },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("${crop.width.toInt()} × ${crop.height.toInt()}", color = Color.White, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        TextButton(onClick = { cropping = false }) { Text(str(R.string.cancel)) }
+                        Button(onClick = { applyCrop() }) { Text(str(R.string.crop)) }
+                    }
+                    return@Column
+                }
                 if (drawing) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -309,12 +425,15 @@ fun ImageEditorScreen(
                             modifier = Modifier.rotate(90f)
                         )
                     }
+                    IconButton(onClick = { startCrop() }, enabled = enabled) {
+                        Icon(Icons.Default.Crop, contentDescription = str(R.string.crop), tint = Color.White)
+                    }
                     IconButton(onClick = { showResize = true }, enabled = enabled) {
                         Icon(Icons.Default.PhotoSizeSelectLarge, contentDescription = str(R.string.resize), tint = Color.White)
                     }
                     FilterChip(
                         selected = drawing,
-                        onClick = { drawing = !drawing },
+                        onClick = { drawing = !drawing; cropping = false },
                         enabled = enabled,
                         label = { Icon(Icons.Default.Brush, contentDescription = str(R.string.draw)) }
                     )
@@ -373,10 +492,172 @@ fun ImageEditorScreen(
                         drawPath(path, s.color, style = Stroke(width = s.width * scale, cap = StrokeCap.Round, join = StrokeJoin.Round))
                     }
                 }
+                if (cropping) {
+                    CropOverlay(
+                        crop = crop,
+                        onCrop = { crop = it },
+                        ratio = ratio,
+                        imageW = bmp.width.toFloat(),
+                        imageH = bmp.height.toFloat(),
+                        left = left,
+                        top = top,
+                        scale = scale
+                    )
+                }
             }
         }
     }
 }
+
+private enum class Grip { TL, TR, BL, BR, L, R, T, B, MOVE }
+
+/**
+ * The crop frame over the picture: drag a corner or an edge to resize, the inside to move it.
+ * [crop] is in the picture's pixels; [left], [top], [scale] place the picture on screen.
+ */
+@Composable
+private fun CropOverlay(
+    crop: Rect,
+    onCrop: (Rect) -> Unit,
+    ratio: Float?,
+    imageW: Float,
+    imageH: Float,
+    left: Float,
+    top: Float,
+    scale: Float
+) {
+    val density = LocalDensity.current
+    val touch = with(density) { 28.dp.toPx() }
+    val handle = with(density) { 22.dp.toPx() }
+    // Never more than the picture itself: a thin banner is narrower than a finger's 48 dp.
+    val minSide = minOf(maxOf(16f, with(density) { 48.dp.toPx() } / scale), imageW, imageH)
+    val current by rememberUpdatedState(crop)
+    val currentRatio by rememberUpdatedState(ratio)
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(imageW, imageH, scale, left, top) {
+                var grip: Grip? = null
+                var anchor = Offset.Zero
+                var pointer = Offset.Zero
+                detectDragGestures(
+                    onDragStart = { p ->
+                        val r = current
+                        val sl = left + r.left * scale; val st = top + r.top * scale
+                        val sr = left + r.right * scale; val sb = top + r.bottom * scale
+                        fun near(x: Float, y: Float) = kotlin.math.abs(p.x - x) < touch && kotlin.math.abs(p.y - y) < touch
+                        val inX = p.x in sl..sr
+                        val inY = p.y in st..sb
+                        grip = when {
+                            near(sl, st) -> Grip.TL
+                            near(sr, st) -> Grip.TR
+                            near(sl, sb) -> Grip.BL
+                            near(sr, sb) -> Grip.BR
+                            // Edges keep a fixed ratio only through the corners.
+                            currentRatio == null && inY && kotlin.math.abs(p.x - sl) < touch -> Grip.L
+                            currentRatio == null && inY && kotlin.math.abs(p.x - sr) < touch -> Grip.R
+                            currentRatio == null && inX && kotlin.math.abs(p.y - st) < touch -> Grip.T
+                            currentRatio == null && inX && kotlin.math.abs(p.y - sb) < touch -> Grip.B
+                            inX && inY -> Grip.MOVE
+                            else -> null
+                        }
+                        anchor = when (grip) {
+                            Grip.TL -> Offset(r.right, r.bottom)
+                            Grip.TR -> Offset(r.left, r.bottom)
+                            Grip.BL -> Offset(r.right, r.top)
+                            Grip.BR -> Offset(r.left, r.top)
+                            else -> Offset.Zero
+                        }
+                        // From the grip itself, so the edge does not jump to where the finger landed.
+                        val touchAt = Offset((p.x - left) / scale, (p.y - top) / scale)
+                        pointer = when (grip) {
+                            Grip.TL -> Offset(r.left, r.top)
+                            Grip.TR -> Offset(r.right, r.top)
+                            Grip.BL -> Offset(r.left, r.bottom)
+                            Grip.BR -> Offset(r.right, r.bottom)
+                            Grip.L -> Offset(r.left, touchAt.y)
+                            Grip.R -> Offset(r.right, touchAt.y)
+                            Grip.T -> Offset(touchAt.x, r.top)
+                            Grip.B -> Offset(touchAt.x, r.bottom)
+                            else -> touchAt
+                        }
+                    },
+                    onDragEnd = { grip = null },
+                    onDrag = { change, drag ->
+                        change.consume()
+                        val g = grip ?: return@detectDragGestures
+                        val d = Offset(drag.x / scale, drag.y / scale)
+                        pointer += d
+                        val r = current
+                        val next = when (g) {
+                            Grip.MOVE -> {
+                                val dx = d.x.clampIn(-r.left, imageW - r.right)
+                                val dy = d.y.clampIn(-r.top, imageH - r.bottom)
+                                r.translate(dx, dy)
+                            }
+                            Grip.L -> r.copy(left = pointer.x.clampIn(0f, r.right - minSide))
+                            Grip.R -> r.copy(right = pointer.x.clampIn(r.left + minSide, imageW))
+                            Grip.T -> r.copy(top = pointer.y.clampIn(0f, r.bottom - minSide))
+                            Grip.B -> r.copy(bottom = pointer.y.clampIn(r.top + minSide, imageH))
+                            else -> {
+                                // A corner: the opposite one stays where it is.
+                                val toRight = g == Grip.TR || g == Grip.BR
+                                val toBottom = g == Grip.BL || g == Grip.BR
+                                val maxW = if (toRight) imageW - anchor.x else anchor.x
+                                val maxH = if (toBottom) imageH - anchor.y else anchor.y
+                                var w = kotlin.math.abs(pointer.x - anchor.x).clampIn(minSide, maxW)
+                                var h = kotlin.math.abs(pointer.y - anchor.y).clampIn(minSide, maxH)
+                                currentRatio?.let { k ->
+                                    // Follow the larger pull, then fit inside the picture.
+                                    if (w / h > k) h = w / k else w = h * k
+                                    if (w > maxW) { w = maxW; h = w / k }
+                                    if (h > maxH) { h = maxH; w = h * k }
+                                }
+                                val l = if (toRight) anchor.x else anchor.x - w
+                                val t = if (toBottom) anchor.y else anchor.y - h
+                                Rect(l, t, l + w, t + h)
+                            }
+                        }
+                        onCrop(next)
+                    }
+                )
+            }
+    ) {
+        val r = Rect(left + crop.left * scale, top + crop.top * scale, left + crop.right * scale, top + crop.bottom * scale)
+        val shade = Color.Black.copy(alpha = 0.55f)
+        // Dim all but the frame.
+        drawRect(shade, Offset(0f, 0f), Size(size.width, r.top))
+        drawRect(shade, Offset(0f, r.bottom), Size(size.width, size.height - r.bottom))
+        drawRect(shade, Offset(0f, r.top), Size(r.left, r.height))
+        drawRect(shade, Offset(r.right, r.top), Size(size.width - r.right, r.height))
+        // Thirds, to place the subject.
+        for (i in 1..2) {
+            val x = r.left + r.width * i / 3
+            val y = r.top + r.height * i / 3
+            drawLine(Color.White.copy(alpha = 0.5f), Offset(x, r.top), Offset(x, r.bottom), 1f)
+            drawLine(Color.White.copy(alpha = 0.5f), Offset(r.left, y), Offset(r.right, y), 1f)
+        }
+        drawRect(Color.White, r.topLeft, r.size, style = Stroke(width = 2f))
+        val w = 4.dp.toPx()
+        listOf(r.topLeft to Offset(1f, 1f), r.topRight to Offset(-1f, 1f), r.bottomLeft to Offset(1f, -1f), r.bottomRight to Offset(-1f, -1f))
+            .forEach { (c, dir) ->
+                drawLine(Color.White, c, c + Offset(handle * dir.x, 0f), w, cap = StrokeCap.Round)
+                drawLine(Color.White, c, c + Offset(0f, handle * dir.y), w, cap = StrokeCap.Round)
+            }
+        if (ratio == null) {
+            listOf(
+                Offset(r.left, r.center.y) to true, Offset(r.right, r.center.y) to true,
+                Offset(r.center.x, r.top) to false, Offset(r.center.x, r.bottom) to false
+            ).forEach { (c, vertical) ->
+                if (vertical) drawLine(Color.White, c - Offset(0f, handle / 2), c + Offset(0f, handle / 2), w, cap = StrokeCap.Round)
+                else drawLine(Color.White, c - Offset(handle / 2, 0f), c + Offset(handle / 2, 0f), w, cap = StrokeCap.Round)
+            }
+        }
+    }
+}
+
+/** coerceIn that does not throw when the bounds cross (a frame smaller than the minimum): the lower one wins. */
+private fun Float.clampIn(lo: Float, hi: Float): Float = maxOf(lo, minOf(this, hi))
 
 private val WRITABLE = setOf("jpg", "jpeg", "png", "webp")
 

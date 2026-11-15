@@ -53,6 +53,10 @@ class TransferQueue(private val repository: FileRepository, private val describe
     private val _changed = MutableSharedFlow<Location>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val changed: SharedFlow<Location> = _changed.asSharedFlow()
 
+    /** What a finished move took away: the folders the items came from changed too. */
+    private val _movedFrom = MutableSharedFlow<List<FileItem>>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val movedFrom: SharedFlow<List<FileItem>> = _movedFrom.asSharedFlow()
+
     val isActive: Boolean get() = _state.value.let { it.current != null || it.queued > 0 }
 
     fun enqueue(request: TransferRequest) {
@@ -66,6 +70,7 @@ class TransferQueue(private val repository: FileRepository, private val describe
                 running = null
                 _state.update { it.copy(current = null) }
                 _changed.tryEmit(request.dest)
+                if (request.move) _movedFrom.tryEmit(request.items)
             }
         }
     }

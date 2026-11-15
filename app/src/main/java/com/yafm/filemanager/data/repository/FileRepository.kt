@@ -30,6 +30,7 @@ import com.yafm.filemanager.data.model.ServerConfig
 import com.yafm.filemanager.data.model.StorageStats
 import com.yafm.filemanager.data.model.StorageType
 import com.yafm.filemanager.data.qsh.Qsh
+import com.yafm.filemanager.data.stream.StreamServer
 import com.yafm.filemanager.data.transfer.Copier
 import com.yafm.filemanager.data.transfer.Runner
 import com.yafm.filemanager.data.transfer.TransferMeter
@@ -68,6 +69,12 @@ class FileRepository(context: Context) {
     private val root = RootFileSystem()
     private val local = LocalFileSystem(root) { rootGranted }
     private val remote = ConcurrentHashMap<String, FileSystem>()
+
+    // Servers with a session in the app, for the "connected" mark on the home screen.
+    private val _connected = MutableStateFlow<Set<String>>(emptySet())
+    val connected: StateFlow<Set<String>> = _connected.asStateFlow()
+    // By isOpen: a dropped link is not shown as connected. Refreshed after every operation.
+    private fun updateConnected() { _connected.value = remote.filterValues { it.isOpen }.keys.toSet() }
     private val knownHosts = File(context.filesDir, "ssh_known_hosts")
     private val openCache = File(context.cacheDir, "open").apply { deleteRecursively() }
     private val media = MediaIndex(context)
@@ -129,7 +136,7 @@ class FileRepository(context: Context) {
             try {
                 return runInterruptible(Dispatchers.IO) {
                     running.incrementAndGet()
-                    try { block() } finally { running.decrementAndGet() }
+                    try { block() } finally { running.decrementAndGet(); updateConnected() }
                 }
             } catch (e: Qsh.CodeRequired) {
                 if (!askCode(e, seen)) throw e
@@ -173,9 +180,9 @@ class FileRepository(context: Context) {
         StorageType.ROOT -> root
         else -> {
             val id = serverId ?: throw IOException(str(R.string.no_server_given))
-            remote.getOrPut(id) {
+            remote[id] ?: remote.getOrPut(id) {
                 create(servers.getServer(id) ?: throw IOException(str(R.string.the_server_was_removed)))
-            }
+            }.also { updateConnected() }
         }
     }
 
@@ -186,6 +193,7 @@ class FileRepository(context: Context) {
         remote.remove(serverId)?.let { fs ->
             Thread { runCatching { if (fs is QshFileSystem) fs.logOut() else fs.close() } }.start()
         }
+        updateConnected()
     }
 
     val hasOpenConnections: Boolean get() = remote.values.any { it.isOpen }
@@ -369,6 +377,33 @@ class FileRepository(context: Context) {
         }
         return skipped
     }
+
+    /** Bytes of server files for players, read as they are asked for. */
+    private val streams = StreamServer(
+        serve = { item, offset, length, out ->
+            runBlocking {
+                io {
+                    fs(item).openRead(item.path, offset).use { input ->
+                        val buffer = ByteArray(256 * 1024)
+                        var left = length
+                        while (left > 0) {
+                            val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            left -= n
+                        }
+                    }
+                }
+            }
+        },
+        sizeOf = { item -> runCatching { runBlocking { io { fs(item).stat(item.path)?.size } } }.getOrNull() }
+    )
+
+    /** Whether [item] is on a server, where players get [streamUrl] instead of a fetched copy. */
+    fun canStream(item: FileItem) = item.storageType != StorageType.LOCAL && item.storageType != StorageType.ROOT
+
+    /** An http://127.0.0.1 link that plays [item] from its server, with seeking, without fetching it first. */
+    fun streamUrl(item: FileItem): android.net.Uri = streams.urlFor(item)
 
     /** A local file for viewers, archives and other apps: the file itself, or a copy in the cache. */
     suspend fun materialize(item: FileItem): File = io {

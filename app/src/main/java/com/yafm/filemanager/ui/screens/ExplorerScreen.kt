@@ -7,6 +7,9 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.CloseFullscreen
+import androidx.compose.material.icons.filled.VerticalSplit
+import com.yafm.filemanager.data.model.Location
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -129,11 +132,17 @@ fun ExplorerScreen(
     onNavigateBack: () -> Unit,
     onOpenFileInEditor: (FileItem) -> Unit,
     onOpenImage: (FileItem) -> Unit,
-    onOpenVideo: (java.io.File, List<java.io.File>) -> Unit,
+    onOpenVideo: (java.io.File, List<java.io.File>, Map<String, Uri>) -> Unit,
     onOpenAudio: (java.io.File, List<java.io.File>) -> Unit,
     onEditImage: (FileItem) -> Unit,
     onOpenArchive: (FileItem) -> Unit,
-    onOpenDuplicates: () -> Unit
+    onOpenDuplicates: () -> Unit,
+    /** Two panes: only the pane last touched answers Back. */
+    active: Boolean = true,
+    dual: Boolean = false,
+    onToggleDual: (() -> Unit)? = null,
+    /** The other pane's folder, for "copy/move to the other pane". */
+    otherLocation: Location? = null
 ) {
     val context = LocalContext.current
     val currentPath by viewModel.currentPath.collectAsState()
@@ -206,13 +215,22 @@ fun ExplorerScreen(
     val advanced = viewModel.settings.settings.collectAsState().value.advanced
 
     fun playBuiltIn(item: FileItem) {
+        // From a server: played as it arrives, the folder's other videos next and previous.
+        if (viewModel.repository.canStream(item)) {
+            val videos = fileList.filter { it.category == FileCategory.VIDEO && !it.isDirectory }
+                .takeIf { list -> list.any { it.path == item.path } } ?: listOf(item)
+            val files = videos.map { streamKey(it) }
+            val streams = videos.associate { streamKey(it).path to viewModel.repository.streamUrl(it) }
+            onOpenVideo(streamKey(item), files, streams)
+            return
+        }
         viewModel.withLocalCopy(item) { file ->
             // Next/previous: the other videos of the same local folder.
             val playlist = if (item.storageType == StorageType.LOCAL || item.storageType == StorageType.ROOT) {
                 fileList.filter { it.category == FileCategory.VIDEO }.map { java.io.File(it.path) }.filter { it.canRead() }
             } else emptyList()
             // A file opened "as video" is not in the folder's video list: it plays alone.
-            onOpenVideo(file, playlist.takeIf { list -> list.any { it.absolutePath == file.absolutePath } } ?: listOf(file))
+            onOpenVideo(file, playlist.takeIf { list -> list.any { it.absolutePath == file.absolutePath } } ?: listOf(file), emptyMap())
         }
     }
 
@@ -228,10 +246,16 @@ fun ExplorerScreen(
         }
     }
 
+    // Another player gets the stream link for a server file: it starts at once and can seek.
+    fun openVideoExternally(item: FileItem) {
+        if (viewModel.repository.canStream(item)) openStreamExternally(context, item, viewModel.repository.streamUrl(item))
+        else viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) }
+    }
+
     fun openVideo(item: FileItem) {
         when (viewModel.settings.settings.value.videoPlayer) {
             VideoPlayer.BUILT_IN -> playBuiltIn(item)
-            VideoPlayer.SYSTEM -> viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) }
+            VideoPlayer.SYSTEM -> openVideoExternally(item)
             VideoPlayer.ASK -> videoChoice = item
         }
     }
@@ -244,7 +268,7 @@ fun ExplorerScreen(
                 if (remember) {
                     viewModel.settings.update { it.copy(videoPlayer = if (builtIn) VideoPlayer.BUILT_IN else VideoPlayer.SYSTEM) }
                 }
-                if (builtIn) playBuiltIn(item) else viewModel.withLocalCopy(item) { openExternalIntent(context, item, it) }
+                if (builtIn) playBuiltIn(item) else openVideoExternally(item)
             }
         )
     }
@@ -274,7 +298,7 @@ fun ExplorerScreen(
         (fileList.firstOrNull { it.path == path } ?: FileItem(File(path).name, path, size = File(path).length())).let { openItem(it) }
     }
 
-    BackHandler {
+    BackHandler(enabled = active) {
         if (isSelectionMode) {
             viewModel.clearSelection()
         } else if (isSearchActive) {
@@ -554,13 +578,6 @@ fun ExplorerScreen(
                         }
                     }
 
-                    IconButton(onClick = { viewModel.toggleGridView() }) {
-                        Icon(
-                            imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                            contentDescription = str(R.string.change_view)
-                        )
-                    }
-
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = str(R.string.sort))
@@ -589,6 +606,14 @@ fun ExplorerScreen(
                         }
                     }
 
+                    if (onToggleDual != null) {
+                        IconButton(onClick = onToggleDual) {
+                            Icon(
+                                if (dual) Icons.Default.CloseFullscreen else Icons.Default.VerticalSplit,
+                                contentDescription = str(if (dual) R.string.one_pane else R.string.two_panes)
+                            )
+                        }
+                    }
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = str(R.string.menu))
@@ -597,6 +622,17 @@ fun ExplorerScreen(
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false }
                         ) {
+                            // In the menu, not the bar: the folder name needs the room on a phone.
+                            DropdownMenuItem(
+                                text = { Text(str(if (isGridView) R.string.view_as_list else R.string.view_as_grid)) },
+                                leadingIcon = {
+                                    Icon(if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView, contentDescription = null)
+                                },
+                                onClick = {
+                                    viewModel.toggleGridView()
+                                    showMoreMenu = false
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (showHidden) str(R.string.hide_hidden_files) else str(R.string.show_hidden_files)) },
                                 onClick = {
@@ -703,7 +739,7 @@ fun ExplorerScreen(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     modifier = Modifier.size(44.dp)
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null)
+                                    Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = str(R.string.new_file))
                                 }
                             }
 
@@ -723,7 +759,7 @@ fun ExplorerScreen(
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     modifier = Modifier.size(44.dp)
                                 ) {
-                                    Icon(Icons.Default.CreateNewFolder, contentDescription = null)
+                                    Icon(Icons.Default.CreateNewFolder, contentDescription = str(R.string.new_folder))
                                 }
                             }
                         }
@@ -783,6 +819,10 @@ fun ExplorerScreen(
                         viewModel.withLocalCopies(selectedItems.toList()) { files -> shareFiles(context, files) }
                     },
                     moreActions = buildList {
+                        if (otherLocation != null && otherLocation.category == null) {
+                            add(str(R.string.copy_to_other_pane) to { viewModel.sendSelectedTo(otherLocation, move = false) })
+                            add(str(R.string.move_to_other_pane) to { viewModel.sendSelectedTo(otherLocation, move = true) })
+                        }
                         val single = selectedItems.singleOrNull()
                         if (single != null) {
                             add(str(R.string.rename) to { viewModel.clearSelection(); renameTarget = single })
@@ -807,7 +847,7 @@ fun ExplorerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TransferCard(transfers, viewModel::cancelTransfer, viewModel::retryTransfer, viewModel::dismissFailedTransfer)
+            if (!viewModel.isSecondPane) TransferCard(transfers, viewModel::cancelTransfer, viewModel::retryTransfer, viewModel::dismissFailedTransfer)
 
             progress?.let { text ->
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -855,8 +895,14 @@ fun ExplorerScreen(
                 }
             }
 
-            // Content Area
-            Box(
+            // Content Area; pulling the list down loads the folder again.
+            var refreshing by remember { mutableStateOf(false) }
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    refreshing = true
+                    viewModel.refresh { refreshing = false }
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f)
@@ -911,7 +957,7 @@ fun ExplorerScreen(
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Adaptive(110.dp),
-                            contentPadding = PaddingValues(12.dp),
+                            contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 88.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxSize()
@@ -945,7 +991,7 @@ fun ExplorerScreen(
                     } else {
                         LazyColumn(
                             state = listState,
-                            contentPadding = PaddingValues(vertical = 4.dp),
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             sections.forEach { (folder, group) ->
@@ -1015,6 +1061,22 @@ private fun shareFiles(context: Context, files: List<File>) {
             Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
         }.setType(type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(Intent.createChooser(intent, str(R.string.share)))
+    } catch (e: Exception) {
+        Toast.makeText(context, str(R.string.could_not_open_the_file, e.message), Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** Where a server file is remembered (resume position) and named in the player; never read from disk. */
+fun streamKey(item: FileItem) = File("/${item.storageType.name.lowercase()}/${item.serverId}${item.path}")
+
+fun openStreamExternally(context: Context, item: FileItem, uri: Uri) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, item.mimeType)
+            putExtra(Intent.EXTRA_TITLE, item.name)
+            putExtra("title", item.name)
+        }
+        context.startActivity(Intent.createChooser(intent, str(R.string.open_with)))
     } catch (e: Exception) {
         Toast.makeText(context, str(R.string.could_not_open_the_file, e.message), Toast.LENGTH_SHORT).show()
     }

@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.remember
+import com.yafm.filemanager.data.settings.CustomTheme
+import com.yafm.filemanager.data.settings.Palette
 import com.yafm.filemanager.data.settings.ThemeMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -48,7 +51,8 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun YafmTheme(
     theme: ThemeMode = ThemeMode.SYSTEM,
-    dynamicColor: Boolean = true,
+    palette: Palette = Palette.DYNAMIC,
+    custom: CustomTheme = CustomTheme(),
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (theme) {
@@ -57,10 +61,12 @@ fun YafmTheme(
         ThemeMode.DARK, ThemeMode.AMOLED -> true
     }
     val base = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        palette == Palette.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        palette == Palette.CUSTOM -> remember(custom.seed, darkTheme) { seedScheme(Color(custom.seed), darkTheme) }
+        palette.seed != null -> remember(palette, darkTheme) { seedScheme(Color(palette.seed), darkTheme) }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -75,6 +81,8 @@ fun YafmTheme(
             surfaceVariant = Color(0xFF161616)
         )
     } else base
+    // Hand-set colors win over everything, AMOLED black included.
+    val finalScheme = if (palette == Palette.CUSTOM) colorScheme.withOverrides(if (darkTheme) custom.dark else custom.light) else colorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -82,14 +90,16 @@ fun YafmTheme(
             val window = (view.context as? Activity)?.window
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, view)
-                insetsController.isAppearanceLightStatusBars = !darkTheme
-                insetsController.isAppearanceLightNavigationBars = !darkTheme
+                // By the background itself: a custom theme may set a light one in the dark look.
+                val lightBars = androidx.core.graphics.ColorUtils.calculateLuminance(finalScheme.background.toArgb()) > 0.5
+                insetsController.isAppearanceLightStatusBars = lightBars
+                insetsController.isAppearanceLightNavigationBars = lightBars
             }
         }
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = finalScheme,
         typography = Typography,
         content = content
     )

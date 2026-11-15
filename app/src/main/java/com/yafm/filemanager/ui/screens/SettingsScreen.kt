@@ -7,7 +7,16 @@ import android.content.Intent
 import com.yafm.filemanager.str
 import com.yafm.filemanager.R
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,7 +73,8 @@ import com.yafm.filemanager.ui.viewmodel.FileExplorerViewModel.UpdateState
 @Composable
 fun SettingsScreen(
     viewModel: FileExplorerViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onOpenThemeEditor: () -> Unit
 ) {
     val settings by viewModel.settings.settings.collectAsState()
     val update by viewModel.update.collectAsState()
@@ -99,9 +109,9 @@ fun SettingsScreen(
             ).forEach { (mode, label) ->
                 Choice(label, settings.theme == mode) { viewModel.settings.update { it.copy(theme = mode) } }
             }
-            Toggle(str(R.string.wallpaper_colors_material_you), settings.dynamicColor) { on ->
-                viewModel.settings.update { it.copy(dynamicColor = on) }
-            }
+            Section(str(R.string.theme_colors))
+            PaletteRow(settings.palette) { p -> viewModel.settings.update { it.copy(palette = p) } }
+            OutlinedButton(onClick = onOpenThemeEditor) { Text(str(R.string.theme_customize)) }
 
             // Android 13+ keeps a language per app in its own settings page.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -200,6 +210,66 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/** One circle per ready palette; wallpaper colors only where Android has them (12+). */
+@Composable
+private fun PaletteRow(selected: com.yafm.filemanager.data.settings.Palette, onSelect: (com.yafm.filemanager.data.settings.Palette) -> Unit) {
+    val dynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val choices = com.yafm.filemanager.data.settings.Palette.entries.filter { dynamic || it != com.yafm.filemanager.data.settings.Palette.DYNAMIC }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)
+    ) {
+        choices.forEach { p ->
+            val color = when (p) {
+                com.yafm.filemanager.data.settings.Palette.DYNAMIC -> MaterialTheme.colorScheme.primary
+                com.yafm.filemanager.data.settings.Palette.BLUE -> com.yafm.filemanager.ui.theme.BluePrimary
+                com.yafm.filemanager.data.settings.Palette.CUSTOM -> MaterialTheme.colorScheme.tertiary
+                else -> androidx.compose.ui.graphics.Color(p.seed!!)
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .selectable(selected = selected == p, onClick = { onSelect(p) }, role = Role.RadioButton)
+                    .padding(4.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(color)
+                        .border(
+                            if (selected == p) 3.dp else 0.dp,
+                            MaterialTheme.colorScheme.onSurface,
+                            androidx.compose.foundation.shape.CircleShape
+                        )
+                ) {
+                    when {
+                        selected == p -> Icon(Icons.Default.Check, contentDescription = null, tint = com.yafm.filemanager.ui.theme.readableOn(color))
+                        p == com.yafm.filemanager.data.settings.Palette.DYNAMIC -> Icon(Icons.Default.Wallpaper, contentDescription = null, tint = com.yafm.filemanager.ui.theme.readableOn(color))
+                        p == com.yafm.filemanager.data.settings.Palette.CUSTOM -> Icon(Icons.Default.Palette, contentDescription = null, tint = com.yafm.filemanager.ui.theme.readableOn(color))
+                    }
+                }
+                Text(str(paletteName(p)), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
+        }
+    }
+}
+
+private fun paletteName(p: com.yafm.filemanager.data.settings.Palette) = when (p) {
+    com.yafm.filemanager.data.settings.Palette.DYNAMIC -> R.string.palette_dynamic
+    com.yafm.filemanager.data.settings.Palette.BLUE -> R.string.palette_blue
+    com.yafm.filemanager.data.settings.Palette.GREEN -> R.string.palette_green
+    com.yafm.filemanager.data.settings.Palette.YELLOW -> R.string.palette_yellow
+    com.yafm.filemanager.data.settings.Palette.ORANGE -> R.string.palette_orange
+    com.yafm.filemanager.data.settings.Palette.RED -> R.string.palette_red
+    com.yafm.filemanager.data.settings.Palette.PINK -> R.string.palette_pink
+    com.yafm.filemanager.data.settings.Palette.PURPLE -> R.string.palette_purple
+    com.yafm.filemanager.data.settings.Palette.TEAL -> R.string.palette_teal
+    com.yafm.filemanager.data.settings.Palette.CUSTOM -> R.string.palette_custom
 }
 
 @Composable

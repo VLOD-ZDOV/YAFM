@@ -71,7 +71,7 @@ fun StorageGaugeCard(
                 Icon(
                     imageVector = if (stats.isRoot) Icons.Default.AdminPanelSettings else Icons.Default.PhoneAndroid,
                     contentDescription = null,
-                    tint = if (stats.isRoot) RootColor else BluePrimary,
+                    tint = if (stats.isRoot) RootColor else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
 

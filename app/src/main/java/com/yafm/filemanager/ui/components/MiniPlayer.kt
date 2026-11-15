@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,9 +61,18 @@ fun MiniPlayer(onOpen: (File, List<File>) -> Unit, onShown: (Boolean) -> Unit, m
     var hasMusic by remember { mutableStateOf(false) }
     var track by remember { mutableStateOf<String?>(null) }
 
-    DisposableEffect(Unit) {
+    // Bumped when the service drops the connection: a new controller is made.
+    var connection by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(connection) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val future = MediaController.Builder(context, token)
+            .setListener(object : MediaController.Listener {
+                override fun onDisconnected(controller: MediaController) {
+                    connection++
+                }
+            })
+            .buildAsync()
         fun sync(player: Player) {
             hasMusic = player.mediaItemCount > 0 && player.playbackState != Player.STATE_IDLE
             playing = player.isPlaying
@@ -82,6 +92,7 @@ fun MiniPlayer(onOpen: (File, List<File>) -> Unit, onShown: (Boolean) -> Unit, m
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             controller?.removeListener(listener)
+            controller = null
             MediaController.releaseFuture(future)
         }
     }

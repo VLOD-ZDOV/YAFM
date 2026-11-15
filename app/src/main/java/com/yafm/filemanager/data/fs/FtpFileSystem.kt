@@ -89,8 +89,12 @@ class FtpFileSystem(private val config: ServerConfig) : FileSystem {
         )
     }
 
-    override fun openRead(path: String): InputStream {
+    override fun openRead(path: String): InputStream = openRead(path, 0L)
+
+    // REST: the server starts at the offset, so seeking in a video does not read the start again.
+    override fun openRead(path: String, offset: Long): InputStream {
         val ftp = connect()
+        if (offset > 0) ftp.restartOffset = offset
         val stream = ftp.retrieveFileStream(checked(path)) ?: run {
             val reply = ftp.replyString
             ftp.disconnect()

@@ -145,10 +145,15 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private val _selectedItems = MutableStateFlow<Set<FileItem>>(emptySet())
     val selectedItems: StateFlow<Set<FileItem>> = _selectedItems.asStateFlow()
 
-    private val _clipboardItems = MutableStateFlow<List<FileItem>>(emptyList())
+    // One clipboard for the app: copied in one pane, pasted in the other.
+    /** The second pane of the two-pane view: transfers are shown by the first one. */
+    @Volatile
+    var isSecondPane = false
+
+    private val _clipboardItems = sharedClipboardItems
     val clipboardItems: StateFlow<List<FileItem>> = _clipboardItems.asStateFlow()
 
-    private val _clipboardOp = MutableStateFlow(ClipboardOp.NONE)
+    private val _clipboardOp = sharedClipboardOp
     val clipboardOp: StateFlow<ClipboardOp> = _clipboardOp.asStateFlow()
 
     private val history = ArrayDeque<Location>()
@@ -164,8 +169,19 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     init {
         refreshDashboard()
         loadCurrentDirectory()
-        viewModelScope.launch { repository.transfers.messages.collect { _messages.tryEmit(it) } }
+        // The queue is shared: only the first pane reports on it, or each message would show twice.
+        viewModelScope.launch { repository.transfers.messages.collect { if (!isSecondPane) _messages.tryEmit(it) } }
         viewModelScope.launch { repository.transfers.changed.collect { if (it == _location.value) loadCurrentDirectory() } }
+        viewModelScope.launch {
+            repository.transfers.movedFrom.collect { items ->
+                val here = _location.value
+                if (here.category == null && items.any {
+                        it.storageType == here.type && it.serverId == here.server?.id &&
+                            com.yafm.filemanager.data.fs.parentPath(it.path) == com.yafm.filemanager.data.fs.parentPath(com.yafm.filemanager.data.fs.joinPath(here.path, it.name))
+                    }
+                ) loadCurrentDirectory()
+            }
+        }
     }
 
     fun refreshDashboard() {
@@ -177,17 +193,41 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    /** Pull to refresh: loads the folder again in place; [onDone] when the list is there. */
+    fun refresh(onDone: () -> Unit) {
+        loadCurrentDirectory()
+        loadJob?.invokeOnCompletion { onDone() } ?: onDone()
+    }
+
+    /** The folder the list shows; loading it again is a refresh. */
+    private var loadedFor: Location? = null
+
+    /**
+     * A new folder starts with a spinner and no selection. A refresh of the same one (a transfer finished,
+     * a file was saved) swaps the list in place and keeps what is still there selected.
+     */
     fun loadCurrentDirectory() {
         loadJob?.cancel()
+        val here = _location.value
+        val refresh = here == loadedFor && _errorMessage.value == null
         loadJob = viewModelScope.launch {
-            _isLoading.value = true
+            if (!refresh) {
+                _isLoading.value = true
+                _selectedItems.value = emptySet()
+            }
             _errorMessage.value = null
-            _selectedItems.value = emptySet()
             try {
-                rawFiles.value = repository.list(_location.value)
+                val list = repository.list(here)
+                rawFiles.value = list
+                loadedFor = here
+                if (refresh && _selectedItems.value.isNotEmpty()) {
+                    val kept = _selectedItems.value.map { it.path }.toSet()
+                    _selectedItems.value = list.filter { it.path in kept }.toSet()
+                }
             } catch (e: Exception) {
                 _errorMessage.value = describe(e)
                 rawFiles.value = emptyList()
+                loadedFor = null
             } finally {
                 _isLoading.value = false
             }
@@ -512,6 +552,22 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    /** Copies or moves the selection straight into [dest] (the other pane's folder). */
+    fun sendSelectedTo(dest: Location, move: Boolean) {
+        val items = _selectedItems.value.toList()
+        if (items.isEmpty()) return
+        clearSelection()
+        val request = TransferRequest(items, dest, move, OnConflict.KEEP_BOTH)
+        viewModelScope.launch {
+            try {
+                val taken = repository.conflicts(request.items, request.dest, request.move)
+                if (taken.isEmpty()) repository.transfers.enqueue(request) else _pasteConflict.value = PasteConflict(request, taken.map { it.name })
+            } catch (e: Exception) {
+                _messages.tryEmit(describe(e))
+            }
+        }
+    }
+
     /** Null: the paste is called off. */
     fun resolvePasteConflict(choice: OnConflict?) {
         val conflict = _pasteConflict.value ?: return
@@ -520,7 +576,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private fun startTransfer(request: TransferRequest) {
-        clearClipboard()
+        // A send to the other pane leaves the clipboard alone.
+        if (request.items == _clipboardItems.value) clearClipboard()
         repository.transfers.enqueue(request)
     }
 
@@ -844,6 +901,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
+        private val sharedClipboardItems = MutableStateFlow<List<FileItem>>(emptyList())
+        private val sharedClipboardOp = MutableStateFlow(ClipboardOp.NONE)
+
         /** How a category screen is split: recent files by day, the other categories by folder. */
         fun sections(items: List<FileItem>, location: Location, sort: SortMode = SortMode.NAME_ASC): List<Pair<String?, List<FileItem>>> = when (location.category) {
             null -> listOf(null to items)

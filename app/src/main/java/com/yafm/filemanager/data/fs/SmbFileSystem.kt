@@ -72,6 +72,33 @@ class SmbFileSystem(private val config: ServerConfig) : FileSystem {
         }
     }
 
+    // Reads at the offset itself: players seek in big files many times.
+    override fun openRead(path: String, offset: Long): InputStream {
+        val file = share().openFile(
+            smbPath(path), EnumSet.of(AccessMask.GENERIC_READ), null,
+            SMB2ShareAccess.ALL, SMB2CreateDisposition.FILE_OPEN, null
+        )
+        return object : InputStream() {
+            private var pos = offset
+
+            override fun read(): Int {
+                val one = ByteArray(1)
+                return if (read(one, 0, 1) <= 0) -1 else one[0].toInt() and 0xff
+            }
+
+            // 64 KB per request: SMB 2.0.2 servers take no more than that.
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (len == 0) return 0
+                val n = file.read(b, pos, off, minOf(len, 64 * 1024))
+                if (n <= 0) return -1
+                pos += n
+                return n
+            }
+
+            override fun close() = file.close()
+        }
+    }
+
     override fun openWrite(path: String): OutputStream {
         val file = share().openFile(
             smbPath(path), EnumSet.of(AccessMask.GENERIC_WRITE), null,

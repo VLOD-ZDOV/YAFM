@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.annotation.StringRes
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import android.os.Build
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import coil.decode.VideoFrameDecoder
 import com.yafm.filemanager.ui.thumbs.AudioCoverFetcher
 import com.yafm.filemanager.ui.thumbs.ThumbnailFetcher
@@ -34,8 +37,10 @@ class YafmApp : Application(), ImageLoaderFactory {
     val settings by lazy { SettingsRepository(this) }
 
     // Video frames as thumbnails, next to Coil's image decoders; previews are kept on disk.
+    // GIF (and animated WebP/HEIF on 28+) play in the viewer; thumbnails keep their first frame.
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .components {
+            add(if (Build.VERSION.SDK_INT >= 28) ImageDecoderDecoder.Factory() else GifDecoder.Factory())
             add(VideoFrameDecoder.Factory())
             add(AudioCoverFetcher.Factory())
             add(ThumbnailFetcher.Factory())

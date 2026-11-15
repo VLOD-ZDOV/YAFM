@@ -39,15 +39,37 @@ object RootCommander {
     @Volatile
     private var detectedSuPath: String? = null
 
+    @Volatile
+    private var mountMaster: Boolean? = null
+
+    /**
+     * Android gives each app its own mount namespace, where /data/data holds only that app's folder;
+     * `su` inherits it unless asked for the global one (`--mount-master`: Magisk, KernelSU, APatch).
+     * Su builds without the option are used as they are.
+     */
+    private fun mountMasterArgs(su: String): List<String> {
+        mountMaster?.let { return if (it) listOf("--mount-master") else emptyList() }
+        // A missing binary throws here and is not remembered: the next candidate is tried.
+        val p = ProcessBuilder(su, "--mount-master", "-c", "echo ok").redirectErrorStream(true).start()
+        val works = runCatching {
+            p.outputStream.close()
+            val out = p.inputStream.bufferedReader().readText().trim()
+            if (!p.waitFor(15, TimeUnit.SECONDS)) p.destroyForcibly()
+            p.exitValue() == 0 && out == "ok"
+        }.getOrDefault(false)
+        mountMaster = works
+        return if (works) listOf("--mount-master") else emptyList()
+    }
+
     private fun startSuProcess(vararg args: String): Process {
         detectedSuPath?.let { path ->
             try {
-                return ProcessBuilder(path, *args).start()
+                return ProcessBuilder(listOf(path) + mountMasterArgs(path) + args).start()
             } catch (_: Exception) {}
         }
         for (candidate in listOf("su") + SU_PATHS) {
             try {
-                val p = ProcessBuilder(candidate, *args).start()
+                val p = ProcessBuilder(listOf(candidate) + mountMasterArgs(candidate) + args).start()
                 detectedSuPath = candidate
                 return p
             } catch (_: Exception) {}
@@ -59,6 +81,8 @@ object RootCommander {
         val suFile = SU_PATHS.firstOrNull { File(it).exists() }
         val suFound = suFile != null
 
+        // Asked again: a denied first prompt must not leave root without the global mounts.
+        mountMaster = null
         val result = execute("id")
         val isGranted = result.isSuccess && result.stdout.any { it.contains("uid=0(root)") || it.contains("0(root)") }
 

@@ -21,6 +21,22 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Close
 import android.widget.Toast
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import com.yafm.filemanager.data.model.StorageType
 import androidx.compose.foundation.layout.Arrangement
@@ -140,6 +156,11 @@ fun HomeScreen(
     var showAddServerDialog by remember { mutableStateOf(false) }
     var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
     var deletingServer by remember { mutableStateOf<ServerConfig?>(null) }
+    var infoServer by remember { mutableStateOf<ServerConfig?>(null) }
+    val connected by viewModel.repository.connected.collectAsState()
+    infoServer?.let { server ->
+        com.yafm.filemanager.ui.components.ServerInfoDialog(server, server.remotePath.ifEmpty { "." }, viewModel.repository) { infoServer = null }
+    }
 
     val categories = remember {
         val root = Environment.getExternalStorageDirectory().absolutePath
@@ -458,11 +479,11 @@ fun HomeScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = BluePrimary.copy(alpha = 0.15f),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.PieChart, contentDescription = null, tint = BluePrimary)
+                                    Icon(Icons.Default.PieChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -562,15 +583,22 @@ fun HomeScreen(
                     }
                 }
             } else {
-                items(servers) { server ->
+                items(servers, key = { it.id }) { server ->
                     ServerCard(
                         server = server,
+                        connected = server.id in connected,
+                        isFirst = server.id == servers.first().id,
+                        isLast = server.id == servers.last().id,
                         onClick = {
                             viewModel.navigateToServer(server)
                             onNavigateToExplorer()
                         },
                         onEdit = { editingServer = server },
-                        onDelete = { deletingServer = server }
+                        onDelete = { deletingServer = server },
+                        onDisconnect = { viewModel.repository.invalidate(server.id) },
+                        onDuplicate = { viewModel.serverRepo.duplicate(server.id, str(R.string.copy_of, server.name)) },
+                        onInfo = { infoServer = server },
+                        onMove = { by -> viewModel.serverRepo.move(server.id, by) }
                     )
                 }
             }
@@ -682,37 +710,63 @@ fun CategoryCard(
     }
 }
 
+/** A saved server: tap opens it; the menu (⋮ or a long press) holds the rest. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ServerCard(
     server: ServerConfig,
+    connected: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDisconnect: () -> Unit,
+    onDuplicate: () -> Unit,
+    onInfo: () -> Unit,
+    onMove: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    var menu by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clip(RoundedCornerShape(14.dp))
+            .combinedClickable(onClick = onClick, onLongClick = { menu = true }),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = BluePrimary.copy(alpha = 0.15f),
-                modifier = Modifier.size(42.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Dns,
-                        contentDescription = null,
-                        tint = BluePrimary,
-                        modifier = Modifier.size(24.dp)
+            Box {
+                Surface(shape = RoundedCornerShape(10.dp), color = accent.copy(alpha = 0.15f), modifier = Modifier.size(42.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when (server.type) {
+                                StorageType.QSH -> Icons.Default.Bolt
+                                StorageType.SMB -> Icons.Default.Computer
+                                StorageType.FTP -> Icons.Default.Cloud
+                                else -> Icons.Default.Dns
+                            },
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                if (connected) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(12.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(SuccessGreen)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.CircleShape)
                     )
                 }
             }
@@ -723,28 +777,58 @@ fun ServerCard(
                 Text(
                     text = server.name,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = server.summary(),
+                    text = (if (connected) str(R.string.connected) + " · " else "") + server.summary(),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (connected) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            IconButton(onClick = onEdit) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = str(R.string.edit),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (connected) {
+                IconButton(onClick = onDisconnect) {
+                    Icon(Icons.Default.LinkOff, contentDescription = str(R.string.disconnect), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = str(R.string.delete),
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                )
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = str(R.string.more), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    @Composable
+                    fun item(label: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean = true, action: () -> Unit) =
+                        DropdownMenuItem(
+                            text = { Text(str(label)) },
+                            leadingIcon = { Icon(icon, contentDescription = null) },
+                            enabled = enabled,
+                            onClick = { menu = false; action() }
+                        )
+                    item(R.string.open, Icons.Default.FolderOpen, action = onClick)
+                    item(R.string.edit, Icons.Default.Edit, action = onEdit)
+                    item(R.string.duplicate, Icons.Default.ContentCopy, action = onDuplicate)
+                    item(R.string.copy_address, Icons.Default.Link) {
+                        val clip = context.getSystemService(android.content.ClipboardManager::class.java)
+                        clip?.setPrimaryClip(android.content.ClipData.newPlainText(server.name, server.summary()))
+                        Toast.makeText(context, str(R.string.copied), Toast.LENGTH_SHORT).show()
+                    }
+                    if (server.type == StorageType.SFTP || server.type == StorageType.QSH) {
+                        item(R.string.server_info, Icons.Default.Info, action = onInfo)
+                    }
+                    item(R.string.move_up, Icons.Default.ArrowUpward, enabled = !isFirst) { onMove(-1) }
+                    item(R.string.move_down, Icons.Default.ArrowDownward, enabled = !isLast) { onMove(1) }
+                    if (connected) item(R.string.disconnect, Icons.Default.LinkOff, action = onDisconnect)
+                    androidx.compose.material3.HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(str(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { menu = false; onDelete() }
+                    )
+                }
             }
         }
     }

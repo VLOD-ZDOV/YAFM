@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
+import androidx.core.graphics.drawable.toBitmap
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.decode.ImageSource
@@ -53,8 +54,12 @@ class ThumbnailFetcher(
             .build()
         return when (val result = imageLoader.execute(request)) {
             is SuccessResult -> {
-                (result.drawable as? BitmapDrawable)?.bitmap?.let { ThumbnailCache.save(cached, it) }
-                DrawableResult(result.drawable, isSampled = true, dataSource = DataSource.DISK)
+                // An animated image comes as a moving drawable: its first frame is the preview.
+                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                    ?: runCatching { result.drawable.toBitmap() }.getOrNull()
+                bitmap?.let { ThumbnailCache.save(cached, it) }
+                val still = bitmap?.let { BitmapDrawable(options.context.resources, it) } ?: result.drawable
+                DrawableResult(still, isSampled = true, dataSource = DataSource.DISK)
             }
             is ErrorResult -> {
                 ThumbnailCache.markMissing(cached)

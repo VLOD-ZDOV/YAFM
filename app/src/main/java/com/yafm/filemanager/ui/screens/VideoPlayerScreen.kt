@@ -106,6 +106,7 @@ private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 fun VideoPlayerScreen(
     file: File,
     playlist: List<File>,
+    streams: Map<String, Uri>,
     seekStepMs: Long,
     sideGestures: Boolean,
     onNavigateBack: () -> Unit
@@ -125,6 +126,9 @@ fun VideoPlayerScreen(
     var length by remember { mutableLongStateOf(0L) }
     var controls by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
+    // Picture in picture: leaving the app keeps the video playing in a small window, controls hidden.
+    var inPip by remember { mutableStateOf(false) }
+    var videoRatio by remember { mutableStateOf(android.util.Rational(16, 9)) }
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var scaleIndex by remember { mutableIntStateOf(0) }
     var speed by remember { mutableFloatStateOf(1f) }
@@ -143,15 +147,19 @@ fun VideoPlayerScreen(
         prefs.edit().putLong(current.absolutePath, if (l > 0 && t < l - 5_000) t else 0L).apply()
     }
 
-    /** [startAt]: where to begin, in ms; by default where this file was left. */
-    fun open(f: File, startAt: Long? = null) {
-        if (player.media != null) savePosition()
+    /** [startAt]: where to begin, in ms; by default where this file was left. [paused]: opened but not played. */
+    fun open(f: File, startAt: Long? = null, paused: Boolean = false) {
+        // After stop() (the app was left) time is unknown: the position saved then must stay.
+        if (player.media != null && player.time > 0) savePosition()
         current = f
-        val media = Media(libVlc, Uri.fromFile(f))
+        val media = Media(libVlc, streams[f.path] ?: Uri.fromFile(f))
+        // From a server: a bigger buffer rides over short stalls of the connection.
+        if (f.path in streams) media.addOption(":network-caching=3000")
         media.setHWDecoderEnabled(true, false)
         // A seek right after play() is ignored while the file is still opening: libVLC starts there itself.
         val start = startAt ?: prefs.getLong(f.absolutePath, 0L)
         if (start > 0) media.addOption(":start-time=${start / 1000.0}")
+        if (paused) media.addOption(":start-paused")
         player.media = media
         media.release()
         player.play()
@@ -212,7 +220,34 @@ fun VideoPlayerScreen(
         }
         open(file)
 
+        // Leaving the app destroys the picture's surface, and libVLC does not draw into the new one by itself:
+        // back in the app there was sound without a picture. So the player lets go of the screen when the
+        // app goes away, and opens the video again where it was when it comes back.
+        var resumeAt: Long? = null
+        var resumePlaying = false
+        val lifecycle = (context as androidx.lifecycle.LifecycleOwner).lifecycle
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> if (player.media != null && !ended) {
+                    resumeAt = player.time.coerceAtLeast(0L)
+                    resumePlaying = player.isPlaying
+                    savePosition()
+                    player.stop()
+                    player.detachViews()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_START -> resumeAt?.let { at ->
+                    resumeAt = null
+                    player.attachViews(layout, null, true, false)
+                    open(current, at, paused = !resumePlaying)
+                    time = at
+                }
+                else -> {}
+            }
+        }
+        lifecycle.addObserver(observer)
+
         onDispose {
+            lifecycle.removeObserver(observer)
             savePosition()
             player.setEventListener(null)
             player.stop()
@@ -234,11 +269,55 @@ fun VideoPlayerScreen(
             if (v != null && v.width > 0 && v.height > 0) {
                 // Orientations 4..7 are the transposed ones (rotated by 90 or 270 degrees).
                 val (w, h) = if (v.orientation in 4..7) v.height to v.width else v.width to v.height
+                // Android takes ratios from 1:2.39 to 2.39:1 for the small window.
+                videoRatio = android.util.Rational(w, h).let { r ->
+                    when {
+                        r.toFloat() > 2.39f -> android.util.Rational(239, 100)
+                        r.toFloat() < 1 / 2.39f -> android.util.Rational(100, 239)
+                        else -> r
+                    }
+                }
                 activity.requestedOrientation = if (w > h) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                 return@LaunchedEffect
             }
             delay(200)
+        }
+    }
+
+    // Android 12+ goes into the small window by itself on Home while the video plays.
+    fun pipParams(): android.app.PictureInPictureParams =
+        android.app.PictureInPictureParams.Builder()
+            .setAspectRatio(videoRatio)
+            .apply { if (android.os.Build.VERSION.SDK_INT >= 31) setAutoEnterEnabled(playing && !locked) }
+            .build()
+    val pipSupported = remember { activity.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE) }
+    LaunchedEffect(playing, videoRatio, locked) {
+        if (pipSupported) runCatching { activity.setPictureInPictureParams(pipParams()) }
+    }
+    DisposableEffect(Unit) {
+        val owner = activity as androidx.activity.ComponentActivity
+        val modeListener = androidx.core.util.Consumer<androidx.core.app.PictureInPictureModeChangedInfo> { info ->
+            inPip = info.isInPictureInPictureMode
+            if (inPip) { controls = false; hint = null }
+        }
+        // Before Android 12 there is no auto enter: Home is caught here instead.
+        val leaveHint = Runnable {
+            if (pipSupported && android.os.Build.VERSION.SDK_INT < 31 && player.isPlaying && !locked) {
+                runCatching { activity.enterPictureInPictureMode(pipParams()) }
+            }
+        }
+        owner.addOnPictureInPictureModeChangedListener(modeListener)
+        owner.addOnUserLeaveHintListener(leaveHint)
+        onDispose {
+            owner.removeOnPictureInPictureModeChangedListener(modeListener)
+            owner.removeOnUserLeaveHintListener(leaveHint)
+            // Other screens must not shrink into a small window.
+            if (pipSupported && android.os.Build.VERSION.SDK_INT >= 31) {
+                runCatching {
+                    activity.setPictureInPictureParams(android.app.PictureInPictureParams.Builder().setAutoEnterEnabled(false).build())
+                }
+            }
         }
     }
 
@@ -357,7 +436,7 @@ fun VideoPlayerScreen(
                 }
         )
 
-        hint?.let {
+        hint?.takeIf { !inPip }?.let {
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
                 shape = RoundedCornerShape(12.dp),
@@ -367,7 +446,7 @@ fun VideoPlayerScreen(
             }
         }
 
-        AnimatedVisibility(visible = controls, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(visible = controls && !inPip, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
             if (locked) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Button(

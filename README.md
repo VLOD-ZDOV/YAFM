@@ -15,9 +15,10 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Duplicates: files with the same content, under any name, in a category or a folder tree. The copy outside messenger and cache folders is kept.
 - Thumbnails for images and videos, type labels on icons (PDF, Word, ZIP...), list and grid views, search, sorting, hidden files.
 - Send files to other apps, invert the selection. Unknown files that hold text open in the editor; others can be opened as text, archive, picture, video or music. Files opened from other apps ("Open with") get a choice of actions.
-- The text editor keeps a file's encoding (UTF-8, cp1251, KOI8-R, CP866, UTF-16), can convert it to UTF-8, and shows binary files read only.
+- The text editor keeps a file's encoding (UTF-8, cp1251, KOI8-R, CP866, UTF-16), can convert it to UTF-8, and shows binary files read only. Find and replace, undo and redo, line wrapping, go to line, text size. Markdown files open formatted.
+- Two panes, side by side or one above the other: copy or move straight into the other pane, for example from a server to the phone.
 - Batch rename, permissions (chmod), file properties with MD5 and SHA-256. Links can be created in advanced mode (root folders and SFTP).
-- Photos: a basic editor (rotate, mirror, resize, draw) that keeps the shooting date and place, and clean copies without metadata for sharing.
+- Photos: a viewer with pinch zoom and swiping through the folder, animated GIFs, and a basic editor (crop with a frame and fixed ratios, rotate, mirror, resize to any size, draw) that keeps the shooting date and place. Clean copies without metadata for sharing.
 - Links are never followed when deleting or copying folders: a link is removed, not what it points to.
 
 ### Archives
@@ -27,8 +28,8 @@ An Android file manager for phone storage, root and network servers, with a vide
 - Files are only written inside the chosen folder; links and devices from an archive are skipped. Existing files are kept, skipped or replaced, as chosen.
 
 ### Players
-- Video: libVLC, so nearly any format plays (mkv with AC3/DTS, avi, wmv, flv...). Gestures for seeking, brightness and volume, audio track and subtitle choice, speed, frame modes, screen lock, resume, next/previous in the folder. Opening a video can ask whether to use it or another app.
-- Music: background playback with the system notification and lock screen controls, cover art, shuffle, repeat, the folder as a queue that goes round (also from the Music category); the notification opens the player.
+- Video: libVLC, so nearly any format plays (mkv with AC3/DTS, avi, wmv, flv...). Gestures for seeking, brightness and volume, audio track and subtitle choice, speed, frame modes, screen lock, resume, next/previous in the folder, picture in picture. Videos on servers play as they arrive, with seeking, without downloading them first. Opening a video can ask whether to use it or another app.
+- Music: background playback with the system notification and lock screen controls, cover art, seek buttons, shuffle, repeat, the folder as a queue that goes round (also from the Music category); the notification opens the player.
 
 ### Network storage
 - **SFTP** (SSH): one connection per server; a new server key is shown with its fingerprint to accept, a changed one comes with a warning. Password, key and one-time codes (keyboard-interactive).
@@ -36,11 +37,12 @@ An Android file manager for phone storage, root and network servers, with a vide
 - **On SFTP and qsh servers**: copies stay on the server (`cp`), archives can be made and unpacked there with its own programs, plus folder size, disk space, permissions for a whole folder and going to a typed path.
 - **qsh** (SSH over QUIC with TCP fallback): browse and copy over the server's sftp subsystem. Sign in with this phone's key by pairing with a code from `qshd pair`, or add the key shown in the settings to the server. One-time codes (2FA) are asked for when the server wants one, in any operation, and the login lasts 30 minutes after you leave the app.
 - **SMB** 2/3 (Windows shares, NAS) and **FTP** (unencrypted, for trusted networks).
+- The home screen shows which servers are connected; a server's menu can disconnect, duplicate, copy its address or move it in the list.
 - Saved passwords are encrypted with a key from the Android Keystore.
 
 ### Other
 - App manager with APK backup, storage analysis by type, root shell (with the top CPU and RAM processes), text editor.
-- Themes: system, light, dark and AMOLED black, with wallpaper colors. Portrait and landscape.
+- Themes: system, light, dark and AMOLED black; wallpaper colors or a ready palette (blue, green, yellow, orange, red, pink, purple, teal), or your own theme with any color set by hand. Portrait and landscape.
 - Updates from GitHub releases, checked at startup (can be turned off).
 - English and Russian.
 

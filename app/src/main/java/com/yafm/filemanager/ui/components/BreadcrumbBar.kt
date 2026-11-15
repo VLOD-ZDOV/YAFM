@@ -1,5 +1,7 @@
 package com.yafm.filemanager.ui.components
 
+import com.yafm.filemanager.str
+import com.yafm.filemanager.R
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,7 +61,7 @@ fun BreadcrumbBar(
                         if (index == 0) {
                             Icon(
                                 imageVector = Icons.Default.Home,
-                                contentDescription = "Root",
+                                contentDescription = str(R.string.root_access),
                                 modifier = Modifier
                                     .size(16.dp)
                                     .padding(end = 4.dp),
